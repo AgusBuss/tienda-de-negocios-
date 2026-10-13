@@ -25,7 +25,7 @@ namespace InventarioAPI.Services
             {
                 new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
                 new Claim(ClaimTypes.Name, usuario.NombreUsuario),
-                new Claim(ClaimTypes.Role, usuario.Rol)
+                new Claim(ClaimTypes.Role, usuario.Rol!.Nombre)
             };
 
             var expira = DateTime.UtcNow.AddHours(8);

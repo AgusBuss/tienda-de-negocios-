@@ -21,6 +21,8 @@ namespace InventarioAPI.Controllers
         }
 
         // POST: api/auth/registro
+        // El registro público SIEMPRE crea un usuario con rol Cliente.
+        // Los roles Admin y Vendedor los asigna un Admin desde api/usuarios.
         [HttpPost("registro")]
         public async Task<ActionResult<AuthResponseDto>> Registro(RegistroDto dto)
         {
@@ -28,12 +30,15 @@ namespace InventarioAPI.Controllers
             if (existe)
                 return BadRequest("Ya existe un usuario con ese nombre.");
 
+            var rolCliente = await _context.Roles.FirstAsync(r => r.Nombre == NombresRol.Cliente);
+
             var usuario = new Usuario
             {
                 NombreUsuario = dto.NombreUsuario,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 Email = dto.Email,
-                Rol = dto.Rol
+                RolId = rolCliente.Id,
+                Rol = rolCliente
             };
 
             _context.Usuarios.Add(usuario);
@@ -45,7 +50,7 @@ namespace InventarioAPI.Controllers
             {
                 Id = usuario.Id,
                 NombreUsuario = usuario.NombreUsuario,
-                Rol = usuario.Rol,
+                Rol = rolCliente.Nombre,
                 Token = token,
                 Expira = expira
             });
@@ -56,6 +61,7 @@ namespace InventarioAPI.Controllers
         public async Task<ActionResult<AuthResponseDto>> Login(LoginDto dto)
         {
             var usuario = await _context.Usuarios
+                .Include(u => u.Rol)
                 .FirstOrDefaultAsync(u => u.NombreUsuario == dto.NombreUsuario);
 
             if (usuario == null || !BCrypt.Net.BCrypt.Verify(dto.Password, usuario.PasswordHash))
@@ -67,7 +73,7 @@ namespace InventarioAPI.Controllers
             {
                 Id = usuario.Id,
                 NombreUsuario = usuario.NombreUsuario,
-                Rol = usuario.Rol,
+                Rol = usuario.Rol!.Nombre,
                 Token = token,
                 Expira = expira
             });

@@ -10,6 +10,7 @@ namespace InventarioAPI.Data
         public DbSet<Categoria> Categorias { get; set; }
         public DbSet<Proveedor> Proveedores { get; set; }
         public DbSet<Cliente> Clientes { get; set; }
+        public DbSet<Rol> Roles { get; set; }
         public DbSet<Usuario> Usuarios { get; set; }
         public DbSet<Producto> Productos { get; set; }
         public DbSet<Ingreso> Ingresos { get; set; }
@@ -19,6 +20,25 @@ namespace InventarioAPI.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Roles (datos iniciales fijos)
+            modelBuilder.Entity<Rol>().HasIndex(r => r.Nombre).IsUnique();
+            modelBuilder.Entity<Rol>().HasData(
+                new Rol { Id = 1, Nombre = NombresRol.Admin },
+                new Rol { Id = 2, Nombre = NombresRol.Vendedor },
+                new Rol { Id = 3, Nombre = NombresRol.Cliente }
+            );
+
+            // Usuario -> Rol
+            modelBuilder.Entity<Usuario>()
+                .HasOne(u => u.Rol)
+                .WithMany(r => r.Usuarios)
+                .HasForeignKey(u => u.RolId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Usuario>()
+                .HasIndex(u => u.NombreUsuario)
+                .IsUnique();
+
             // Producto -> Categoria (obligatoria)
             modelBuilder.Entity<Producto>()
                 .HasOne(p => p.Categoria)

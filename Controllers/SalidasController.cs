@@ -10,7 +10,7 @@ namespace InventarioAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
+    [Authorize(Roles = NombresRol.AdminVendedor)]
     public class SalidasController : ControllerBase
     {
         private readonly AppDbContext _context;

@@ -15,7 +15,7 @@ namespace InventarioAPI.Models
         [MaxLength(150)]
         public string? Email { get; set; }
 
-        [Required, MaxLength(20)]
-        public string Rol { get; set; } = "Empleado"; // Admin o Empleado, por ejemplo
+        public int RolId { get; set; }
+        public Rol? Rol { get; set; }
     }
 }

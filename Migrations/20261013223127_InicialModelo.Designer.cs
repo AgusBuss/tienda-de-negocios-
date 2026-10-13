@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace InventarioAPI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260830151134_InicialModelo")]
+    [Migration("20261013223127_InicialModelo")]
     partial class InicialModelo
     {
         /// <inheritdoc />
@@ -215,6 +215,44 @@ namespace InventarioAPI.Migrations
                     b.ToTable("Proveedores");
                 });
 
+            modelBuilder.Entity("InventarioAPI.Models.Rol", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.ToTable("Roles");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Nombre = "Admin"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Nombre = "Vendedor"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Nombre = "Cliente"
+                        });
+                });
+
             modelBuilder.Entity("InventarioAPI.Models.Salida", b =>
                 {
                     b.Property<int>("Id")
@@ -294,12 +332,15 @@ namespace InventarioAPI.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Rol")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                    b.Property<int>("RolId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("NombreUsuario")
+                        .IsUnique();
+
+                    b.HasIndex("RolId");
 
                     b.ToTable("Usuarios");
                 });
@@ -398,6 +439,17 @@ namespace InventarioAPI.Migrations
                     b.Navigation("Salida");
                 });
 
+            modelBuilder.Entity("InventarioAPI.Models.Usuario", b =>
+                {
+                    b.HasOne("InventarioAPI.Models.Rol", "Rol")
+                        .WithMany("Usuarios")
+                        .HasForeignKey("RolId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Rol");
+                });
+
             modelBuilder.Entity("InventarioAPI.Models.Categoria", b =>
                 {
                     b.Navigation("Productos");
@@ -425,6 +477,11 @@ namespace InventarioAPI.Migrations
                     b.Navigation("Ingresos");
 
                     b.Navigation("Productos");
+                });
+
+            modelBuilder.Entity("InventarioAPI.Models.Rol", b =>
+                {
+                    b.Navigation("Usuarios");
                 });
 
             modelBuilder.Entity("InventarioAPI.Models.Salida", b =>

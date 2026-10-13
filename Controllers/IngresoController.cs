@@ -10,7 +10,7 @@ namespace InventarioAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize] // todo el controlador requiere estar logueado
+    [Authorize(Roles = NombresRol.AdminVendedor)] // todo el controlador requiere estar logueado
     public class IngresosController : ControllerBase
     {
         private readonly AppDbContext _context;

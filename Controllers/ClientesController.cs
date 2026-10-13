@@ -9,6 +9,7 @@ namespace InventarioAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Roles = NombresRol.AdminVendedor)]
     public class ClientesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -71,7 +72,6 @@ namespace InventarioAPI.Controllers
         }
 
         [HttpPost]
-        [Authorize]
         public async Task<ActionResult<ClienteDto>> CrearCliente(ClienteCreateDto dto)
         {
             var cliente = new Cliente
@@ -100,7 +100,6 @@ namespace InventarioAPI.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize]
         public async Task<IActionResult> ActualizarCliente(int id, ClienteCreateDto dto)
         {
             var cliente = await _context.Clientes.FindAsync(id);
@@ -117,7 +116,6 @@ namespace InventarioAPI.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize]
         public async Task<IActionResult> EliminarCliente(int id)
         {
             var cliente = await _context.Clientes.FindAsync(id);

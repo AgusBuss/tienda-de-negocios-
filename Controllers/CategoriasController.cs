@@ -69,7 +69,7 @@ namespace InventarioAPI.Controllers
 
         // POST: api/categorias
         [HttpPost]
-        [Authorize]
+        [Authorize(Roles = NombresRol.AdminVendedor)]
         public async Task<ActionResult<CategoriaDto>> CrearCategoria(CategoriaCreateDto dto)
         {
             var categoria = new Categoria
@@ -93,7 +93,7 @@ namespace InventarioAPI.Controllers
 
         // PUT: api/categorias/5
         [HttpPut("{id}")]
-        [Authorize]
+        [Authorize(Roles = NombresRol.AdminVendedor)]
         public async Task<IActionResult> ActualizarCategoria(int id, CategoriaCreateDto dto)
         {
             var categoria = await _context.Categorias.FindAsync(id);
@@ -108,7 +108,7 @@ namespace InventarioAPI.Controllers
 
         // DELETE: api/categorias/5
         [HttpDelete("{id}")]
-        [Authorize]
+        [Authorize(Roles = NombresRol.AdminVendedor)]
         public async Task<IActionResult> EliminarCategoria(int id)
         {
             var categoria = await _context.Categorias.FindAsync(id);

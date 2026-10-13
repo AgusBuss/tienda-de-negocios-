@@ -99,7 +99,7 @@ namespace InventarioAPI.Controllers
 
         // POST: api/productos
         [HttpPost]
-        [Authorize]
+        [Authorize(Roles = NombresRol.AdminVendedor)]
         public async Task<ActionResult<ProductoDto>> CrearProducto(ProductoCreateDto dto)
         {
             var categoriaExiste = await _context.Categorias.AnyAsync(c => c.Id == dto.CategoriaId);
@@ -138,7 +138,7 @@ namespace InventarioAPI.Controllers
 
         // PUT: api/productos/5
         [HttpPut("{id}")]
-        [Authorize]
+        [Authorize(Roles = NombresRol.AdminVendedor)]
         public async Task<IActionResult> ActualizarProducto(int id, ProductoCreateDto dto)
         {
             var producto = await _context.Productos.FindAsync(id);
@@ -160,7 +160,7 @@ namespace InventarioAPI.Controllers
 
         // DELETE: api/productos/5
         [HttpDelete("{id}")]
-        [Authorize]
+        [Authorize(Roles = NombresRol.AdminVendedor)]
         public async Task<IActionResult> EliminarProducto(int id)
         {
             var producto = await _context.Productos.FindAsync(id);
@@ -179,7 +179,7 @@ namespace InventarioAPI.Controllers
 
         // POST: api/productos/5/imagen
         [HttpPost("{id}/imagen")]
-        [Authorize]
+        [Authorize(Roles = NombresRol.AdminVendedor)]
         public async Task<IActionResult> SubirImagen(int id, IFormFile archivo)
         {
             var producto = await _context.Productos.FindAsync(id);
