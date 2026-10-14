@@ -5,19 +5,22 @@ using Microsoft.EntityFrameworkCore;
 using InventarioAPI.Data;
 using InventarioAPI.Models;
 using InventarioAPI.DTOs;
+using InventarioAPI.Services;
 
 namespace InventarioAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = NombresRol.AdminVendedor)] // todo el controlador requiere estar logueado
+    [Authorize(Roles = NombresRol.AdminVendedor)]
     public class IngresosController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly AuditoriaService _auditoria;
 
-        public IngresosController(AppDbContext context)
+        public IngresosController(AppDbContext context, AuditoriaService auditoria)
         {
             _context = context;
+            _auditoria = auditoria;
         }
 
         // GET: api/ingresos?pagina=1&tamanioPagina=10
@@ -157,6 +160,9 @@ namespace InventarioAPI.Controllers
                 _context.Ingresos.Add(ingreso);
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                await _auditoria.RegistrarAsync("Crear", "Ingreso", ingreso.Id,
+                    $"Entrada de mercadería: {ingreso.Detalles.Count} producto(s), total {ingreso.Total}");
 
                 return await GetIngreso(ingreso.Id);
             }

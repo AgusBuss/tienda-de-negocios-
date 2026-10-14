@@ -17,6 +17,8 @@ namespace InventarioAPI.Data
         public DbSet<IngresoDetalle> IngresoDetalles { get; set; }
         public DbSet<Salida> Salidas { get; set; }
         public DbSet<SalidaDetalle> SalidaDetalles { get; set; }
+        public DbSet<LogError> LogErrores { get; set; }
+        public DbSet<Auditoria> Auditorias { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -104,6 +106,16 @@ namespace InventarioAPI.Data
                 .WithMany(p => p.SalidaDetalles)
                 .HasForeignKey(d => d.ProductoId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Auditoria>()
+               .HasOne(a => a.Usuario)
+               .WithMany()
+               .HasForeignKey(a => a.UsuarioId)
+               .OnDelete(DeleteBehavior.Restrict);
+
+            // Índices para consultar los logs por fecha rápidamente
+            modelBuilder.Entity<LogError>().HasIndex(l => l.Fecha);
+            modelBuilder.Entity<Auditoria>().HasIndex(a => a.Fecha);
         }
     }
 }

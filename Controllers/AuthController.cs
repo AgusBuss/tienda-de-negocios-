@@ -13,11 +13,13 @@ namespace InventarioAPI.Controllers
     {
         private readonly AppDbContext _context;
         private readonly TokenService _tokenService;
+        private readonly AuditoriaService _auditoria;
 
-        public AuthController(AppDbContext context, TokenService tokenService)
+        public AuthController(AppDbContext context, TokenService tokenService, AuditoriaService auditoria)
         {
             _context = context;
             _tokenService = tokenService;
+            _auditoria = auditoria;
         }
 
         // POST: api/auth/registro
@@ -44,6 +46,9 @@ namespace InventarioAPI.Controllers
             _context.Usuarios.Add(usuario);
             await _context.SaveChangesAsync();
 
+            await _auditoria.RegistrarAsync(usuario.Id, "Registro", "Usuario", usuario.Id,
+                $"Nuevo usuario '{usuario.NombreUsuario}' con rol {rolCliente.Nombre}");
+
             var (token, expira) = _tokenService.GenerarToken(usuario);
 
             return Ok(new AuthResponseDto
@@ -66,6 +71,9 @@ namespace InventarioAPI.Controllers
 
             if (usuario == null || !BCrypt.Net.BCrypt.Verify(dto.Password, usuario.PasswordHash))
                 return Unauthorized("Usuario o contraseña incorrectos.");
+
+            await _auditoria.RegistrarAsync(usuario.Id, "Login", "Usuario", usuario.Id,
+                $"Inicio de sesión de '{usuario.NombreUsuario}'");
 
             var (token, expira) = _tokenService.GenerarToken(usuario);
 

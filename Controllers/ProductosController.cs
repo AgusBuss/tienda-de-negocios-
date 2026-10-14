@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using InventarioAPI.Data;
 using InventarioAPI.Models;
 using InventarioAPI.DTOs;
+using InventarioAPI.Services;
 
 namespace InventarioAPI.Controllers
 {
@@ -13,11 +14,13 @@ namespace InventarioAPI.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _env;
+        private readonly AuditoriaService _auditoria;
 
-        public ProductosController(AppDbContext context, IWebHostEnvironment env)
+        public ProductosController(AppDbContext context, IWebHostEnvironment env, AuditoriaService auditoria)
         {
             _context = context;
             _env = env;
+            _auditoria = auditoria;
         }
 
         // GET: api/productos?pagina=1&tamanioPagina=10&categoriaId=2
@@ -124,6 +127,9 @@ namespace InventarioAPI.Controllers
             _context.Productos.Add(producto);
             await _context.SaveChangesAsync();
 
+            await _auditoria.RegistrarAsync("Crear", "Producto", producto.Id,
+                $"Se creó '{producto.Nombre}' (precio {producto.Precio}, stock {producto.Stock})");
+
             return CreatedAtAction(nameof(GetProducto), new { id = producto.Id }, new ProductoDto
             {
                 Id = producto.Id,
@@ -147,6 +153,8 @@ namespace InventarioAPI.Controllers
             var categoriaExiste = await _context.Categorias.AnyAsync(c => c.Id == dto.CategoriaId);
             if (!categoriaExiste) return BadRequest("La categoría indicada no existe.");
 
+            var detalle = $"'{producto.Nombre}': precio {producto.Precio} -> {dto.Precio}, stock {producto.Stock} -> {dto.Stock}";
+
             producto.Nombre = dto.Nombre;
             producto.Descripcion = dto.Descripcion;
             producto.Precio = dto.Precio;
@@ -155,6 +163,9 @@ namespace InventarioAPI.Controllers
             producto.ProveedorId = dto.ProveedorId;
 
             await _context.SaveChangesAsync();
+
+            await _auditoria.RegistrarAsync("Modificar", "Producto", id, detalle);
+
             return NoContent();
         }
 
@@ -172,8 +183,13 @@ namespace InventarioAPI.Controllers
             if (tieneMovimientos)
                 return BadRequest("No se puede eliminar el producto porque tiene movimientos de stock asociados.");
 
+            var nombre = producto.Nombre;
+
             _context.Productos.Remove(producto);
             await _context.SaveChangesAsync();
+
+            await _auditoria.RegistrarAsync("Eliminar", "Producto", id, $"Se eliminó '{nombre}'");
+
             return NoContent();
         }
 
@@ -220,6 +236,9 @@ namespace InventarioAPI.Controllers
 
             producto.ImagenUrl = $"/uploads/{nombreArchivo}";
             await _context.SaveChangesAsync();
+
+            await _auditoria.RegistrarAsync("Modificar", "Producto", id,
+                $"Se actualizó la imagen de '{producto.Nombre}'");
 
             return Ok(new { imagenUrl = producto.ImagenUrl });
         }

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using InventarioAPI.Data;
 using InventarioAPI.DTOs;
 using InventarioAPI.Models;
+using InventarioAPI.Services;
 
 namespace InventarioAPI.Controllers
 {
@@ -14,10 +15,12 @@ namespace InventarioAPI.Controllers
     public class UsuariosController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly AuditoriaService _auditoria;
 
-        public UsuariosController(AppDbContext context)
+        public UsuariosController(AppDbContext context, AuditoriaService auditoria)
         {
             _context = context;
+            _auditoria = auditoria;
         }
 
         // GET: api/usuarios
@@ -60,6 +63,9 @@ namespace InventarioAPI.Controllers
             _context.Usuarios.Add(usuario);
             await _context.SaveChangesAsync();
 
+            await _auditoria.RegistrarAsync("Crear", "Usuario", usuario.Id,
+                $"Se creó el usuario '{usuario.NombreUsuario}' con rol {rol.Nombre}");
+
             return Ok(new UsuarioListadoDto
             {
                 Id = usuario.Id,
@@ -73,7 +79,9 @@ namespace InventarioAPI.Controllers
         [HttpPut("{id}/rol")]
         public async Task<IActionResult> CambiarRol(int id, CambiarRolDto dto)
         {
-            var usuario = await _context.Usuarios.FindAsync(id);
+            var usuario = await _context.Usuarios
+                .Include(u => u.Rol)
+                .FirstOrDefaultAsync(u => u.Id == id);
             if (usuario == null) return NotFound($"No existe el usuario con id {id}.");
 
             var rol = await _context.Roles.FirstOrDefaultAsync(r => r.Nombre == dto.Rol);
@@ -84,8 +92,14 @@ namespace InventarioAPI.Controllers
             if (miId == id.ToString() && rol.Nombre != NombresRol.Admin)
                 return BadRequest("No podés quitarte a vos mismo el rol de Admin.");
 
+            var rolAnterior = usuario.Rol?.Nombre;
+
             usuario.RolId = rol.Id;
             await _context.SaveChangesAsync();
+
+            await _auditoria.RegistrarAsync("Modificar", "Usuario", id,
+                $"Cambio de rol de '{usuario.NombreUsuario}': {rolAnterior} -> {rol.Nombre}");
+
             return NoContent();
         }
     }

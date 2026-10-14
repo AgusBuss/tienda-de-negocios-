@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using InventarioAPI.Data;
 using InventarioAPI.Models;
 using InventarioAPI.DTOs;
+using InventarioAPI.Services;
 
 namespace InventarioAPI.Controllers
 {
@@ -14,10 +15,12 @@ namespace InventarioAPI.Controllers
     public class SalidasController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly AuditoriaService _auditoria;
 
-        public SalidasController(AppDbContext context)
+        public SalidasController(AppDbContext context, AuditoriaService auditoria)
         {
             _context = context;
+            _auditoria = auditoria;
         }
 
         // GET: api/salidas?pagina=1&tamanioPagina=10
@@ -171,6 +174,9 @@ namespace InventarioAPI.Controllers
                 _context.Salidas.Add(salida);
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                await _auditoria.RegistrarAsync("Crear", "Salida", salida.Id,
+                    $"Venta: {salida.Detalles.Count} producto(s), total {salida.Total}");
 
                 return await GetSalida(salida.Id);
             }

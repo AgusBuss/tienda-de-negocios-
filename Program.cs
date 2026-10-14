@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using InventarioAPI.Data;
 using InventarioAPI.Services;
+using InventarioAPI.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,6 +49,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // Servicio de tokens
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<AuditoriaService>();
 
 // Autenticación JWT
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -92,6 +95,8 @@ using (var scope = app.Services.CreateScope())
 
 app.UseSwagger();
 app.UseSwaggerUI();
+
+app.UseMiddleware<ErrorLoggingMiddleware>();
 
 
 app.UseHttpsRedirection();
