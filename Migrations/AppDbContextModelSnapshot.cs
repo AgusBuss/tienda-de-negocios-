@@ -132,9 +132,6 @@ namespace InventarioAPI.Migrations
                     b.Property<int>("ProveedorId")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("Total")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<int>("UsuarioId")
                         .HasColumnType("int");
 
@@ -216,6 +213,52 @@ namespace InventarioAPI.Migrations
                     b.ToTable("LogErrores");
                 });
 
+            modelBuilder.Entity("InventarioAPI.Models.MovimientoStock", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Cantidad")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("IngresoId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Observacion")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("ProductoId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SalidaId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IngresoId");
+
+                    b.HasIndex("SalidaId");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.HasIndex("ProductoId", "Fecha");
+
+                    b.ToTable("MovimientosStock");
+                });
+
             modelBuilder.Entity("InventarioAPI.Models.Producto", b =>
                 {
                     b.Property<int>("Id")
@@ -223,6 +266,11 @@ namespace InventarioAPI.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
 
                     b.Property<int>("CategoriaId")
                         .HasColumnType("int");
@@ -343,9 +391,6 @@ namespace InventarioAPI.Migrations
 
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("datetime2");
-
-                    b.Property<decimal>("Total")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("UsuarioId")
                         .HasColumnType("int");
@@ -471,6 +516,39 @@ namespace InventarioAPI.Migrations
                     b.Navigation("Producto");
                 });
 
+            modelBuilder.Entity("InventarioAPI.Models.MovimientoStock", b =>
+                {
+                    b.HasOne("InventarioAPI.Models.Ingreso", "Ingreso")
+                        .WithMany("Movimientos")
+                        .HasForeignKey("IngresoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("InventarioAPI.Models.Producto", "Producto")
+                        .WithMany("Movimientos")
+                        .HasForeignKey("ProductoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("InventarioAPI.Models.Salida", "Salida")
+                        .WithMany("Movimientos")
+                        .HasForeignKey("SalidaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("InventarioAPI.Models.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Ingreso");
+
+                    b.Navigation("Producto");
+
+                    b.Navigation("Salida");
+
+                    b.Navigation("Usuario");
+                });
+
             modelBuilder.Entity("InventarioAPI.Models.Producto", b =>
                 {
                     b.HasOne("InventarioAPI.Models.Categoria", "Categoria")
@@ -551,11 +629,15 @@ namespace InventarioAPI.Migrations
             modelBuilder.Entity("InventarioAPI.Models.Ingreso", b =>
                 {
                     b.Navigation("Detalles");
+
+                    b.Navigation("Movimientos");
                 });
 
             modelBuilder.Entity("InventarioAPI.Models.Producto", b =>
                 {
                     b.Navigation("IngresoDetalles");
+
+                    b.Navigation("Movimientos");
 
                     b.Navigation("SalidaDetalles");
                 });
@@ -575,6 +657,8 @@ namespace InventarioAPI.Migrations
             modelBuilder.Entity("InventarioAPI.Models.Salida", b =>
                 {
                     b.Navigation("Detalles");
+
+                    b.Navigation("Movimientos");
                 });
 #pragma warning restore 612, 618
         }

@@ -34,9 +34,6 @@ namespace InventarioAPI.Controllers
 
             var query = _context.Ingresos
                 .AsNoTracking()
-                .Include(i => i.Proveedor)
-                .Include(i => i.Usuario)
-                .Include(i => i.Detalles).ThenInclude(d => d.Producto)
                 .OrderByDescending(i => i.Fecha);
 
             var totalRegistros = await query.CountAsync();
@@ -52,7 +49,8 @@ namespace InventarioAPI.Controllers
                     ProveedorNombre = i.Proveedor != null ? i.Proveedor.Nombre : null,
                     UsuarioId = i.UsuarioId,
                     UsuarioNombre = i.Usuario != null ? i.Usuario.NombreUsuario : null,
-                    Total = i.Total,
+                    // El total se calcula, no se guarda (3FN)
+                    Total = i.Detalles.Sum(d => d.Cantidad * d.PrecioUnitario),
                     Detalles = i.Detalles.Select(d => new IngresoDetalleDto
                     {
                         ProductoId = d.ProductoId,
@@ -93,7 +91,7 @@ namespace InventarioAPI.Controllers
                 ProveedorNombre = i.Proveedor?.Nombre,
                 UsuarioId = i.UsuarioId,
                 UsuarioNombre = i.Usuario?.NombreUsuario,
-                Total = i.Total,
+                Total = i.Detalles.Sum(d => d.Cantidad * d.PrecioUnitario),
                 Detalles = i.Detalles.Select(d => new IngresoDetalleDto
                 {
                     ProductoId = d.ProductoId,
@@ -127,8 +125,7 @@ namespace InventarioAPI.Controllers
                 {
                     Fecha = DateTime.Now,
                     ProveedorId = dto.ProveedorId,
-                    UsuarioId = usuarioId,
-                    Total = 0
+                    UsuarioId = usuarioId
                 };
 
                 decimal total = 0;
@@ -137,6 +134,9 @@ namespace InventarioAPI.Controllers
                 {
                     if (det.Cantidad <= 0)
                         return BadRequest($"La cantidad para el producto {det.ProductoId} debe ser mayor a 0.");
+
+                    if (det.PrecioUnitario < 0)
+                        return BadRequest($"El precio para el producto {det.ProductoId} no puede ser negativo.");
 
                     var producto = await _context.Productos.FindAsync(det.ProductoId);
                     if (producto == null)
@@ -149,20 +149,28 @@ namespace InventarioAPI.Controllers
                         PrecioUnitario = det.PrecioUnitario
                     });
 
-                    // Un ingreso SUMA stock
+                    // Un ingreso SUMA stock y deja el movimiento registrado
                     producto.Stock += det.Cantidad;
+
+                    ingreso.Movimientos.Add(new MovimientoStock
+                    {
+                        Fecha = ingreso.Fecha,
+                        ProductoId = det.ProductoId,
+                        Tipo = TipoMovimiento.Entrada,
+                        Cantidad = det.Cantidad,
+                        UsuarioId = usuarioId,
+                        Observacion = "Entrada de mercadería"
+                    });
 
                     total += det.Cantidad * det.PrecioUnitario;
                 }
-
-                ingreso.Total = total;
 
                 _context.Ingresos.Add(ingreso);
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
                 await _auditoria.RegistrarAsync("Crear", "Ingreso", ingreso.Id,
-                    $"Entrada de mercadería: {ingreso.Detalles.Count} producto(s), total {ingreso.Total}");
+                    $"Entrada de mercadería: {ingreso.Detalles.Count} producto(s), total {total}");
 
                 return await GetIngreso(ingreso.Id);
             }

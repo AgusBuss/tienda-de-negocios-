@@ -34,9 +34,6 @@ namespace InventarioAPI.Controllers
 
             var query = _context.Salidas
                 .AsNoTracking()
-                .Include(s => s.Cliente)
-                .Include(s => s.Usuario)
-                .Include(s => s.Detalles).ThenInclude(d => d.Producto)
                 .OrderByDescending(s => s.Fecha);
 
             var totalRegistros = await query.CountAsync();
@@ -52,7 +49,8 @@ namespace InventarioAPI.Controllers
                     ClienteNombre = s.Cliente != null ? s.Cliente.Nombre : null,
                     UsuarioId = s.UsuarioId,
                     UsuarioNombre = s.Usuario != null ? s.Usuario.NombreUsuario : null,
-                    Total = s.Total,
+                    // El total se calcula, no se guarda (3FN)
+                    Total = s.Detalles.Sum(d => d.Cantidad * d.PrecioUnitario),
                     Detalles = s.Detalles.Select(d => new SalidaDetalleDto
                     {
                         ProductoId = d.ProductoId,
@@ -93,7 +91,7 @@ namespace InventarioAPI.Controllers
                 ClienteNombre = s.Cliente?.Nombre,
                 UsuarioId = s.UsuarioId,
                 UsuarioNombre = s.Usuario?.NombreUsuario,
-                Total = s.Total,
+                Total = s.Detalles.Sum(d => d.Cantidad * d.PrecioUnitario),
                 Detalles = s.Detalles.Select(d => new SalidaDetalleDto
                 {
                     ProductoId = d.ProductoId,
@@ -118,65 +116,81 @@ namespace InventarioAPI.Controllers
             if (!int.TryParse(usuarioIdClaim, out var usuarioId))
                 return Unauthorized("No se pudo identificar al usuario del token.");
 
+            if (dto.Detalles.Any(d => d.Cantidad <= 0))
+                return BadRequest("Todas las cantidades deben ser mayores a 0.");
+
+            // Si el mismo producto viene en varias líneas, se suman las cantidades
+            var pedido = dto.Detalles
+                .GroupBy(d => d.ProductoId)
+                .Select(g => new { ProductoId = g.Key, Cantidad = g.Sum(x => x.Cantidad) })
+                .ToList();
+
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // PASO 1: validar que haya stock suficiente para TODOS los productos
+                // PASO 1: validar existencia, estado activo y stock de TODOS los productos
                 // antes de descontar nada (si uno falla, no queremos dejar la venta a medias)
-                var productosCache = new Dictionary<int, Producto>();
+                var productos = new Dictionary<int, Producto>();
 
-                foreach (var det in dto.Detalles)
+                foreach (var item in pedido)
                 {
-                    if (det.Cantidad <= 0)
-                        return BadRequest($"La cantidad para el producto {det.ProductoId} debe ser mayor a 0.");
-
-                    var producto = await _context.Productos.FindAsync(det.ProductoId);
+                    var producto = await _context.Productos.FindAsync(item.ProductoId);
                     if (producto == null)
-                        return BadRequest($"No existe el producto con id {det.ProductoId}.");
+                        return BadRequest($"No existe el producto con id {item.ProductoId}.");
 
-                    if (producto.Stock < det.Cantidad)
+                    if (!producto.Activo)
+                        return BadRequest($"El producto '{producto.Nombre}' no está disponible para la venta.");
+
+                    if (producto.Stock < item.Cantidad)
                         return BadRequest(
-                            $"Stock insuficiente para '{producto.Nombre}'. Stock disponible: {producto.Stock}, solicitado: {det.Cantidad}.");
+                            $"Stock insuficiente para '{producto.Nombre}'. Stock disponible: {producto.Stock}, solicitado: {item.Cantidad}.");
 
-                    productosCache[det.ProductoId] = producto;
+                    productos[item.ProductoId] = producto;
                 }
 
-                // PASO 2: si todo tiene stock suficiente, recién ahí armamos la salida y descontamos
+                // PASO 2: armar la salida con el precio ACTUAL del producto y descontar el stock
                 var salida = new Salida
                 {
                     Fecha = DateTime.Now,
                     ClienteId = dto.ClienteId,
-                    UsuarioId = usuarioId,
-                    Total = 0
+                    UsuarioId = usuarioId
                 };
 
                 decimal total = 0;
 
-                foreach (var det in dto.Detalles)
+                foreach (var item in pedido)
                 {
-                    var producto = productosCache[det.ProductoId];
+                    var producto = productos[item.ProductoId];
 
                     salida.Detalles.Add(new SalidaDetalle
                     {
-                        ProductoId = det.ProductoId,
-                        Cantidad = det.Cantidad,
-                        PrecioUnitario = det.PrecioUnitario
+                        ProductoId = item.ProductoId,
+                        Cantidad = item.Cantidad,
+                        PrecioUnitario = producto.Precio // el precio lo define el servidor
                     });
 
-                    // Una salida RESTA stock
-                    producto.Stock -= det.Cantidad;
+                    // Una salida RESTA stock y deja el movimiento registrado
+                    producto.Stock -= item.Cantidad;
 
-                    total += det.Cantidad * det.PrecioUnitario;
+                    salida.Movimientos.Add(new MovimientoStock
+                    {
+                        Fecha = salida.Fecha,
+                        ProductoId = item.ProductoId,
+                        Tipo = TipoMovimiento.Salida,
+                        Cantidad = -item.Cantidad,
+                        UsuarioId = usuarioId,
+                        Observacion = "Venta"
+                    });
+
+                    total += item.Cantidad * producto.Precio;
                 }
-
-                salida.Total = total;
 
                 _context.Salidas.Add(salida);
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
                 await _auditoria.RegistrarAsync("Crear", "Salida", salida.Id,
-                    $"Venta: {salida.Detalles.Count} producto(s), total {salida.Total}");
+                    $"Venta: {salida.Detalles.Count} producto(s), total {total}");
 
                 return await GetSalida(salida.Id);
             }

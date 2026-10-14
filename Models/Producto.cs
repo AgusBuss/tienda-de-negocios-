@@ -16,10 +16,14 @@ namespace InventarioAPI.Models
         [Column(TypeName = "decimal(18,2)")]
         public decimal Precio { get; set; }
 
+        // Stock actual. Se actualiza con cada MovimientoStock, que guarda el historial.
         public int Stock { get; set; } = 0;
 
         [MaxLength(300)]
         public string? ImagenUrl { get; set; }
+
+        // false = dado de baja: no se muestra en el catálogo ni se puede vender
+        public bool Activo { get; set; } = true;
 
         // FK Categoria (obligatoria)
         public int CategoriaId { get; set; }
@@ -31,5 +35,6 @@ namespace InventarioAPI.Models
 
         public ICollection<IngresoDetalle> IngresoDetalles { get; set; } = new List<IngresoDetalle>();
         public ICollection<SalidaDetalle> SalidaDetalles { get; set; } = new List<SalidaDetalle>();
+        public ICollection<MovimientoStock> Movimientos { get; set; } = new List<MovimientoStock>();
     }
 }

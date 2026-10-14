@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using InventarioAPI.Data;
@@ -23,12 +24,20 @@ namespace InventarioAPI.Controllers
             _auditoria = auditoria;
         }
 
-        // GET: api/productos?pagina=1&tamanioPagina=10&categoriaId=2
+        // Admin y Vendedor pueden ver productos dados de baja
+        private bool EsPersonal =>
+            User.IsInRole(NombresRol.Admin) || User.IsInRole(NombresRol.Vendedor);
+
+        private int? UsuarioIdActual =>
+            int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
+
+        // GET: api/productos?pagina=1&tamanioPagina=10&categoriaId=2&incluirInactivos=true
         [HttpGet]
         public async Task<ActionResult<PagedResult<ProductoDto>>> GetProductos(
             [FromQuery] int pagina = 1,
             [FromQuery] int tamanioPagina = 10,
-            [FromQuery] int? categoriaId = null)
+            [FromQuery] int? categoriaId = null,
+            [FromQuery] bool incluirInactivos = false)
         {
             if (pagina < 1) pagina = 1;
             if (tamanioPagina < 1 || tamanioPagina > 100) tamanioPagina = 10;
@@ -38,6 +47,10 @@ namespace InventarioAPI.Controllers
                 .Include(p => p.Categoria)
                 .Include(p => p.Proveedor)
                 .AsQueryable();
+
+            // El público solo ve productos activos; el personal puede pedir también los inactivos
+            if (!(incluirInactivos && EsPersonal))
+                query = query.Where(p => p.Activo);
 
             if (categoriaId.HasValue)
                 query = query.Where(p => p.CategoriaId == categoriaId.Value);
@@ -83,7 +96,8 @@ namespace InventarioAPI.Controllers
                 .Include(x => x.Proveedor)
                 .FirstOrDefaultAsync(x => x.Id == id);
 
-            if (p == null) return NotFound($"No existe el producto con id {id}.");
+            if (p == null || (!p.Activo && !EsPersonal))
+                return NotFound($"No existe el producto con id {id}.");
 
             return Ok(new ProductoDto
             {
@@ -105,12 +119,18 @@ namespace InventarioAPI.Controllers
         [Authorize(Roles = NombresRol.AdminVendedor)]
         public async Task<ActionResult<ProductoDto>> CrearProducto(ProductoCreateDto dto)
         {
+            if (dto.Precio < 0) return BadRequest("El precio no puede ser negativo.");
+            if (dto.Stock < 0) return BadRequest("El stock no puede ser negativo.");
+
             var categoriaExiste = await _context.Categorias.AnyAsync(c => c.Id == dto.CategoriaId);
             if (!categoriaExiste) return BadRequest("La categoría indicada no existe.");
 
-            if (dto.ProveedorId.HasValue)
+            // Swagger manda 0 por defecto: lo tratamos como "sin proveedor"
+            int? proveedorId = dto.ProveedorId == 0 ? null : dto.ProveedorId;
+
+            if (proveedorId.HasValue)
             {
-                var proveedorExiste = await _context.Proveedores.AnyAsync(p => p.Id == dto.ProveedorId.Value);
+                var proveedorExiste = await _context.Proveedores.AnyAsync(p => p.Id == proveedorId.Value);
                 if (!proveedorExiste) return BadRequest("El proveedor indicado no existe.");
             }
 
@@ -121,8 +141,22 @@ namespace InventarioAPI.Controllers
                 Precio = dto.Precio,
                 Stock = dto.Stock,
                 CategoriaId = dto.CategoriaId,
-                ProveedorId = dto.ProveedorId
+                ProveedorId = proveedorId,
+                Activo = true
             };
+
+            // El stock inicial también deja un movimiento registrado
+            if (dto.Stock > 0 && UsuarioIdActual.HasValue)
+            {
+                producto.Movimientos.Add(new MovimientoStock
+                {
+                    Fecha = DateTime.Now,
+                    Tipo = TipoMovimiento.Ajuste,
+                    Cantidad = dto.Stock,
+                    UsuarioId = UsuarioIdActual.Value,
+                    Observacion = "Stock inicial"
+                });
+            }
 
             _context.Productos.Add(producto);
             await _context.SaveChangesAsync();
@@ -147,20 +181,45 @@ namespace InventarioAPI.Controllers
         [Authorize(Roles = NombresRol.AdminVendedor)]
         public async Task<IActionResult> ActualizarProducto(int id, ProductoCreateDto dto)
         {
+            if (dto.Precio < 0) return BadRequest("El precio no puede ser negativo.");
+            if (dto.Stock < 0) return BadRequest("El stock no puede ser negativo.");
+
             var producto = await _context.Productos.FindAsync(id);
             if (producto == null) return NotFound($"No existe el producto con id {id}.");
 
             var categoriaExiste = await _context.Categorias.AnyAsync(c => c.Id == dto.CategoriaId);
             if (!categoriaExiste) return BadRequest("La categoría indicada no existe.");
 
+            int? proveedorId = dto.ProveedorId == 0 ? null : dto.ProveedorId;
+
+            if (proveedorId.HasValue)
+            {
+                var proveedorExiste = await _context.Proveedores.AnyAsync(p => p.Id == proveedorId.Value);
+                if (!proveedorExiste) return BadRequest("El proveedor indicado no existe.");
+            }
+
             var detalle = $"'{producto.Nombre}': precio {producto.Precio} -> {dto.Precio}, stock {producto.Stock} -> {dto.Stock}";
+
+            // Si cambia el stock a mano, queda registrado como ajuste
+            var diferencia = dto.Stock - producto.Stock;
+            if (diferencia != 0 && UsuarioIdActual.HasValue)
+            {
+                producto.Movimientos.Add(new MovimientoStock
+                {
+                    Fecha = DateTime.Now,
+                    Tipo = TipoMovimiento.Ajuste,
+                    Cantidad = diferencia,
+                    UsuarioId = UsuarioIdActual.Value,
+                    Observacion = "Ajuste manual de stock"
+                });
+            }
 
             producto.Nombre = dto.Nombre;
             producto.Descripcion = dto.Descripcion;
             producto.Precio = dto.Precio;
             producto.Stock = dto.Stock;
             producto.CategoriaId = dto.CategoriaId;
-            producto.ProveedorId = dto.ProveedorId;
+            producto.ProveedorId = proveedorId;
 
             await _context.SaveChangesAsync();
 
@@ -170,6 +229,7 @@ namespace InventarioAPI.Controllers
         }
 
         // DELETE: api/productos/5
+        // Sin movimientos: se borra. Con movimientos: baja lógica (queda inactivo, se conserva el historial).
         [HttpDelete("{id}")]
         [Authorize(Roles = NombresRol.AdminVendedor)]
         public async Task<IActionResult> EliminarProducto(int id)
@@ -177,11 +237,23 @@ namespace InventarioAPI.Controllers
             var producto = await _context.Productos.FindAsync(id);
             if (producto == null) return NotFound($"No existe el producto con id {id}.");
 
-            var tieneMovimientos = await _context.IngresoDetalles.AnyAsync(d => d.ProductoId == id)
-                || await _context.SalidaDetalles.AnyAsync(d => d.ProductoId == id);
+            var tieneHistorial = await _context.IngresoDetalles.AnyAsync(d => d.ProductoId == id)
+                || await _context.SalidaDetalles.AnyAsync(d => d.ProductoId == id)
+                || await _context.MovimientosStock.AnyAsync(m => m.ProductoId == id);
 
-            if (tieneMovimientos)
-                return BadRequest("No se puede eliminar el producto porque tiene movimientos de stock asociados.");
+            if (tieneHistorial)
+            {
+                if (!producto.Activo)
+                    return BadRequest("El producto ya está dado de baja.");
+
+                producto.Activo = false;
+                await _context.SaveChangesAsync();
+
+                await _auditoria.RegistrarAsync("Baja", "Producto", id,
+                    $"Baja lógica de '{producto.Nombre}' (tiene historial de movimientos)");
+
+                return Ok(new { mensaje = "El producto tiene historial, por lo que se dio de baja en lugar de borrarse." });
+            }
 
             var nombre = producto.Nombre;
 

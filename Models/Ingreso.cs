@@ -1,6 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-
-namespace InventarioAPI.Models
+﻿namespace InventarioAPI.Models
 {
     public class Ingreso
     {
@@ -14,9 +12,7 @@ namespace InventarioAPI.Models
         public int UsuarioId { get; set; }
         public Usuario? Usuario { get; set; }
 
-        [Column(TypeName = "decimal(18,2)")]
-        public decimal Total { get; set; }
-
         public ICollection<IngresoDetalle> Detalles { get; set; } = new List<IngresoDetalle>();
+        public ICollection<MovimientoStock> Movimientos { get; set; } = new List<MovimientoStock>();
     }
 }

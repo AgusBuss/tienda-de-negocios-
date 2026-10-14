@@ -19,6 +19,7 @@ namespace InventarioAPI.Data
         public DbSet<SalidaDetalle> SalidaDetalles { get; set; }
         public DbSet<LogError> LogErrores { get; set; }
         public DbSet<Auditoria> Auditorias { get; set; }
+        public DbSet<MovimientoStock> MovimientosStock { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -116,6 +117,40 @@ namespace InventarioAPI.Data
             // Índices para consultar los logs por fecha rápidamente
             modelBuilder.Entity<LogError>().HasIndex(l => l.Fecha);
             modelBuilder.Entity<Auditoria>().HasIndex(a => a.Fecha);
+
+            // Producto.Activo: los productos que ya existen quedan activos al migrar
+            modelBuilder.Entity<Producto>()
+                .Property(p => p.Activo)
+                .HasDefaultValue(true);
+
+            // MovimientoStock -> Producto / Usuario / Ingreso / Salida
+            // Todo en Restrict: SQL Server no permite varios caminos de borrado en cascada
+            modelBuilder.Entity<MovimientoStock>()
+                .HasOne(m => m.Producto)
+                .WithMany(p => p.Movimientos)
+                .HasForeignKey(m => m.ProductoId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MovimientoStock>()
+                .HasOne(m => m.Usuario)
+                .WithMany()
+                .HasForeignKey(m => m.UsuarioId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MovimientoStock>()
+                .HasOne(m => m.Ingreso)
+                .WithMany(i => i.Movimientos)
+                .HasForeignKey(m => m.IngresoId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MovimientoStock>()
+                .HasOne(m => m.Salida)
+                .WithMany(s => s.Movimientos)
+                .HasForeignKey(m => m.SalidaId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Para consultar movimientos por producto y fecha (reportes)
+            modelBuilder.Entity<MovimientoStock>().HasIndex(m => new { m.ProductoId, m.Fecha });
         }
     }
 }
