@@ -113,7 +113,14 @@ namespace InventarioAPI.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<int?>("UsuarioId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId")
+                        .IsUnique()
+                        .HasFilter("[UsuarioId] IS NOT NULL");
 
                     b.ToTable("Clientes");
                 });
@@ -257,6 +264,40 @@ namespace InventarioAPI.Migrations
                     b.HasIndex("ProductoId", "Fecha");
 
                     b.ToTable("MovimientosStock");
+                });
+
+            modelBuilder.Entity("InventarioAPI.Models.Pago", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Metodo")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Referencia")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("SalidaId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UltimosDigitos")
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SalidaId")
+                        .IsUnique();
+
+                    b.ToTable("Pagos");
                 });
 
             modelBuilder.Entity("InventarioAPI.Models.Producto", b =>
@@ -478,6 +519,16 @@ namespace InventarioAPI.Migrations
                     b.Navigation("Usuario");
                 });
 
+            modelBuilder.Entity("InventarioAPI.Models.Cliente", b =>
+                {
+                    b.HasOne("InventarioAPI.Models.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Usuario");
+                });
+
             modelBuilder.Entity("InventarioAPI.Models.Ingreso", b =>
                 {
                     b.HasOne("InventarioAPI.Models.Proveedor", "Proveedor")
@@ -547,6 +598,17 @@ namespace InventarioAPI.Migrations
                     b.Navigation("Salida");
 
                     b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("InventarioAPI.Models.Pago", b =>
+                {
+                    b.HasOne("InventarioAPI.Models.Salida", "Salida")
+                        .WithOne("Pago")
+                        .HasForeignKey("InventarioAPI.Models.Pago", "SalidaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Salida");
                 });
 
             modelBuilder.Entity("InventarioAPI.Models.Producto", b =>
@@ -659,6 +721,8 @@ namespace InventarioAPI.Migrations
                     b.Navigation("Detalles");
 
                     b.Navigation("Movimientos");
+
+                    b.Navigation("Pago");
                 });
 #pragma warning restore 612, 618
         }

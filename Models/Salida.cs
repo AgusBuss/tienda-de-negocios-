@@ -12,6 +12,9 @@
         public int UsuarioId { get; set; }
         public Usuario? Usuario { get; set; }
 
+        // Pago asociado (las ventas de mostrador anteriores pueden no tenerlo)
+        public Pago? Pago { get; set; }
+
         public ICollection<SalidaDetalle> Detalles { get; set; } = new List<SalidaDetalle>();
         public ICollection<MovimientoStock> Movimientos { get; set; } = new List<MovimientoStock>();
     }

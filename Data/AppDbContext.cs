@@ -20,6 +20,7 @@ namespace InventarioAPI.Data
         public DbSet<LogError> LogErrores { get; set; }
         public DbSet<Auditoria> Auditorias { get; set; }
         public DbSet<MovimientoStock> MovimientosStock { get; set; }
+        public DbSet<Pago> Pagos { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -151,6 +152,30 @@ namespace InventarioAPI.Data
 
             // Para consultar movimientos por producto y fecha (reportes)
             modelBuilder.Entity<MovimientoStock>().HasIndex(m => new { m.ProductoId, m.Fecha });
+
+            // Pago <-> Salida: una venta tiene un único pago
+            modelBuilder.Entity<Pago>()
+                .HasOne(p => p.Salida)
+                .WithOne(s => s.Pago)
+                .HasForeignKey<Pago>(p => p.SalidaId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Pago>()
+                .HasIndex(p => p.SalidaId)
+                .IsUnique();
+
+            // Cliente -> Usuario (opcional: la cuenta con la que el cliente compra desde la app)
+            modelBuilder.Entity<Cliente>()
+                .HasOne(c => c.Usuario)
+                .WithMany()
+                .HasForeignKey(c => c.UsuarioId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Un usuario no puede tener dos fichas de cliente
+            modelBuilder.Entity<Cliente>()
+                .HasIndex(c => c.UsuarioId)
+                .IsUnique()
+                .HasFilter("[UsuarioId] IS NOT NULL");
         }
     }
 }

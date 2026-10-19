@@ -21,6 +21,10 @@ namespace InventarioAPI.Models
         [MaxLength(200)]
         public string? Direccion { get; set; }
 
+        // Cuenta de usuario asociada (null si el cliente lo cargó un vendedor en mostrador)
+        public int? UsuarioId { get; set; }
+        public Usuario? Usuario { get; set; }
+
         public ICollection<Salida> Salidas { get; set; } = new List<Salida>();
     }
 }

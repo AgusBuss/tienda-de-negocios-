@@ -31,12 +31,18 @@ namespace InventarioAPI.Controllers
         private int? UsuarioIdActual =>
             int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
-        // GET: api/productos?pagina=1&tamanioPagina=10&categoriaId=2&incluirInactivos=true
+        // GET: api/productos?buscar=coca&soloDisponibles=true&orden=precio_asc&precioMin=5&precioMax=100&categoriaId=2&pagina=1
+        // orden: nombre (por defecto), precio_asc, precio_desc, recientes
         [HttpGet]
         public async Task<ActionResult<PagedResult<ProductoDto>>> GetProductos(
             [FromQuery] int pagina = 1,
             [FromQuery] int tamanioPagina = 10,
             [FromQuery] int? categoriaId = null,
+            [FromQuery] string? buscar = null,
+            [FromQuery] bool soloDisponibles = false,
+            [FromQuery] decimal? precioMin = null,
+            [FromQuery] decimal? precioMax = null,
+            [FromQuery] string? orden = null,
             [FromQuery] bool incluirInactivos = false)
         {
             if (pagina < 1) pagina = 1;
@@ -55,7 +61,32 @@ namespace InventarioAPI.Controllers
             if (categoriaId.HasValue)
                 query = query.Where(p => p.CategoriaId == categoriaId.Value);
 
-            query = query.OrderBy(p => p.Nombre);
+            // Búsqueda por texto en nombre o descripción
+            if (!string.IsNullOrWhiteSpace(buscar))
+            {
+                var texto = buscar.Trim();
+                query = query.Where(p => p.Nombre.Contains(texto)
+                    || (p.Descripcion != null && p.Descripcion.Contains(texto)));
+            }
+
+            // Disponibilidad: solo productos con stock
+            if (soloDisponibles)
+                query = query.Where(p => p.Stock > 0);
+
+            if (precioMin.HasValue)
+                query = query.Where(p => p.Precio >= precioMin.Value);
+
+            if (precioMax.HasValue)
+                query = query.Where(p => p.Precio <= precioMax.Value);
+
+            // Orden
+            query = orden?.ToLowerInvariant() switch
+            {
+                "precio_asc" => query.OrderBy(p => p.Precio).ThenBy(p => p.Nombre),
+                "precio_desc" => query.OrderByDescending(p => p.Precio).ThenBy(p => p.Nombre),
+                "recientes" => query.OrderByDescending(p => p.Id),
+                _ => query.OrderBy(p => p.Nombre)
+            };
 
             var totalRegistros = await query.CountAsync();
 
