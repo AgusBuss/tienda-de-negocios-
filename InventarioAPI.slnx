@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="InventarioAPI.csproj" />
+  <Project Path="InventarioApp/InventarioApp.csproj" Id="3f9a150e-337f-43af-9712-bf7b0870e2f6" />
 </Solution>

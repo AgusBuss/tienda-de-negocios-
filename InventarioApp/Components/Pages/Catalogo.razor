@@ -1,0 +1,248 @@
+@page "/"
+@inject ApiClient Api
+@inject CarritoService Carrito
+
+<PageTitle>Catálogo</PageTitle>
+
+<h1>Catálogo</h1>
+
+<div class="busqueda">
+    <input placeholder="¿Qué estás buscando?" @bind="_filtro.Buscar" @bind:event="oninput"
+           @onkeydown="OnKeyDown" />
+    <button class="btn-buscar" @onclick="BuscarAsync">Buscar</button>
+    <button class="btn-filtros" @onclick="() => _verFiltros = !_verFiltros">
+        Filtros @(_verFiltros ? "▲" : "▼")
+    </button>
+</div>
+
+@if (_verFiltros)
+{
+    <div class="filtros">
+        <div class="campo">
+            <label>Categoría</label>
+            <select @bind="_filtro.CategoriaId" @bind:after="BuscarAsync">
+                <option value="">Todas</option>
+                @foreach (var c in _categorias)
+                {
+                    <option value="@c.Id">@c.Nombre</option>
+                }
+            </select>
+        </div>
+
+        <div class="campo">
+            <label>Ordenar por</label>
+            <select @bind="_filtro.Orden" @bind:after="BuscarAsync">
+                <option value="nombre">Nombre</option>
+                <option value="precio_asc">Menor precio</option>
+                <option value="precio_desc">Mayor precio</option>
+                <option value="recientes">Más recientes</option>
+            </select>
+        </div>
+
+        <div class="fila-precios">
+            <div class="campo">
+                <label>Precio mín.</label>
+                <input type="number" min="0" @bind="_filtro.PrecioMin" />
+            </div>
+            <div class="campo">
+                <label>Precio máx.</label>
+                <input type="number" min="0" @bind="_filtro.PrecioMax" />
+            </div>
+        </div>
+
+        <label class="check">
+            <input type="checkbox" @bind="_filtro.SoloDisponibles" @bind:after="BuscarAsync" />
+            Solo con stock
+        </label>
+
+        <div class="acciones-filtros">
+            <button class="btn-buscar" @onclick="BuscarAsync">Aplicar</button>
+            <button class="btn-limpiar" @onclick="LimpiarAsync">Limpiar</button>
+        </div>
+    </div>
+}
+
+@if (_error is not null)
+{
+    <div class="error">@_error</div>
+}
+
+@if (_aviso is not null)
+{
+    <div class="aviso">@_aviso</div>
+}
+
+@if (_cargando)
+{
+    <p class="estado">Cargando productos...</p>
+}
+else if (_resultado is not null && _resultado.Items.Count == 0 && _error is null)
+{
+    <p class="estado">No se encontraron productos con esos filtros.</p>
+}
+else if (_resultado is not null)
+{
+    <p class="estado">@_resultado.TotalRegistros producto(s)</p>
+
+    <div class="grilla">
+        @foreach (var p in _resultado.Items)
+        {
+            <div class="tarjeta @(p.SinStock ? "agotado" : "")">
+                <div class="foto">
+                    @if (!string.IsNullOrEmpty(p.ImagenUrl))
+                    {
+                        <img src="@ApiConfig.ResolverUrl(p.ImagenUrl)" alt="@p.Nombre" loading="lazy" />
+                    }
+                    else
+                    {
+                        <div class="sin-foto">Sin imagen</div>
+                    }
+                </div>
+                <div class="datos">
+                    <div class="precio">$ @p.Precio.ToString("N2")</div>
+                    <div class="nombre">@p.Nombre</div>
+                    @if (!string.IsNullOrEmpty(p.CategoriaNombre))
+                    {
+                        <div class="cat">@p.CategoriaNombre</div>
+                    }
+                    @if (p.SinStock)
+                    {
+                        <span class="badge rojo">Sin stock</span>
+                    }
+                    else if (p.UltimasUnidades)
+                    {
+                        <span class="badge naranja">¡Últimas @p.Stock unidades!</span>
+                    }
+                    else
+                    {
+                        <span class="badge verde">Disponible</span>
+                    }
+
+                    <button class="btn-agregar" disabled="@p.SinStock" @onclick="() => Agregar(p)">
+                        @(p.SinStock ? "No disponible" : "Agregar al carrito")
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (_resultado.TotalPaginas > 1)
+    {
+        <div class="paginacion">
+            <button disabled="@(_filtro.Pagina <= 1)" @onclick="() => IrAPaginaAsync(_filtro.Pagina - 1)">← Anterior</button>
+            <span>Página @_resultado.PaginaActual de @_resultado.TotalPaginas</span>
+            <button disabled="@(_filtro.Pagina >= _resultado.TotalPaginas)" @onclick="() => IrAPaginaAsync(_filtro.Pagina + 1)">Siguiente →</button>
+        </div>
+    }
+}
+
+<style>
+    .busqueda { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .busqueda input { flex: 1; min-width: 160px; padding: .6rem; border: 1px solid #bbb; border-radius: 8px; font-size: 1rem; }
+    .btn-buscar { padding: .6rem 1rem; border: none; border-radius: 8px; background: #1a73e8; color: #fff; cursor: pointer; }
+    .btn-filtros, .btn-limpiar { padding: .6rem 1rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .filtros { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; background: #fafafa; }
+    .filtros .campo { display: flex; flex-direction: column; margin-bottom: .75rem; flex: 1; }
+    .filtros label { font-weight: 600; margin-bottom: .25rem; }
+    .filtros select, .filtros input[type=number] { padding: .5rem; border: 1px solid #bbb; border-radius: 8px; }
+    .fila-precios { display: flex; gap: .75rem; }
+    .check { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; font-weight: 400 !important; }
+    .acciones-filtros { display: flex; gap: .5rem; }
+    .error { background: #fde8e8; color: #b00020; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .estado { color: #666; }
+    .grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
+    .tarjeta { border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; background: #fff; display: flex; flex-direction: column; }
+    .tarjeta.agotado { opacity: .6; }
+    .foto { height: 150px; background: #f3f3f3; display: flex; align-items: center; justify-content: center; }
+    .foto img { width: 100%; height: 100%; object-fit: cover; }
+    .sin-foto { color: #999; font-size: .85rem; }
+    .datos { padding: .75rem; display: flex; flex-direction: column; gap: .25rem; }
+    .precio { font-size: 1.3rem; font-weight: 600; }
+    .nombre { font-size: .95rem; }
+    .cat { font-size: .8rem; color: #777; }
+    .badge { display: inline-block; font-size: .75rem; padding: .15rem .5rem; border-radius: 6px; width: fit-content; margin-top: .25rem; }
+    .badge.verde { background: #e6f4ea; color: #137333; }
+    .badge.naranja { background: #fef3e0; color: #b25e00; }
+    .badge.rojo { background: #fde8e8; color: #b00020; }
+    .paginacion { display: flex; justify-content: center; align-items: center; gap: 1rem; margin: 1.5rem 0; }
+    .paginacion button { padding: .5rem 1rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .paginacion button:disabled { opacity: .4; }
+    .btn-agregar { margin-top: .5rem; padding: .5rem; border: none; border-radius: 8px; background: #1a73e8; color: #fff; cursor: pointer; font-size: .9rem; }
+    .btn-agregar:disabled { background: #bbb; cursor: not-allowed; }
+    .aviso { background: #e6f4ea; color: #137333; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+</style>
+
+@code {
+    private readonly FiltroProductos _filtro = new() { TamanioPagina = 12 };
+    private List<CategoriaDto> _categorias = new();
+    private PagedResult<ProductoDto>? _resultado;
+    private string? _error;
+    private string? _aviso;
+    private bool _cargando;
+    private bool _verFiltros;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var cats = await Api.GetCategoriasAsync();
+        if (cats.Ok && cats.Data is not null)
+            _categorias = cats.Data;
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _error = null;
+        StateHasChanged();
+
+        var r = await Api.GetProductosAsync(_filtro);
+
+        _cargando = false;
+        if (r.Ok) _resultado = r.Data;
+        else _error = r.Error;
+    }
+
+    private Task BuscarAsync()
+    {
+        _filtro.Pagina = 1;
+        return CargarAsync();
+    }
+
+    private Task IrAPaginaAsync(int pagina)
+    {
+        _filtro.Pagina = pagina;
+        return CargarAsync();
+    }
+
+    private async Task LimpiarAsync()
+    {
+        _filtro.Buscar = null;
+        _filtro.CategoriaId = null;
+        _filtro.PrecioMin = null;
+        _filtro.PrecioMax = null;
+        _filtro.SoloDisponibles = false;
+        _filtro.Orden = "nombre";
+        await BuscarAsync();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await BuscarAsync();
+    }
+
+    private void Agregar(ProductoDto p)
+    {
+        var problema = Carrito.Agregar(p);
+        if (problema is null)
+        {
+            _aviso = $"\"{p.Nombre}\" se agregó al carrito.";
+            _error = null;
+        }
+        else
+        {
+            _error = problema;
+            _aviso = null;
+        }
+    }
+}

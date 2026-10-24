@@ -1,0 +1,187 @@
+@page "/carrito"
+@inject CarritoService CarritoSvc
+@inject ApiClient Api
+@inject SessionService Sesion
+@inject NavigationManager Nav
+
+<PageTitle>Carrito</PageTitle>
+
+<h1>Carrito</h1>
+
+@if (_compra is not null)
+{
+    <div class="exito">
+        <h2>¡Compra realizada!</h2>
+        <p>Compra N° <strong>@_compra.VentaId</strong> · @_compra.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p>
+        <p>Pago: @_compra.MetodoPago
+            @if (!string.IsNullOrEmpty(_compra.UltimosDigitos)) { <span> (tarjeta terminada en @_compra.UltimosDigitos)</span> }
+        </p>
+        @if (!string.IsNullOrEmpty(_compra.Referencia))
+        {
+            <p>Referencia: @_compra.Referencia</p>
+        }
+        <ul>
+            @foreach (var i in _compra.Items)
+            {
+                <li>@i.Cantidad × @i.ProductoNombre — $ @i.Subtotal.ToString("N2")</li>
+            }
+        </ul>
+        <p class="total">Total: $ @_compra.Total.ToString("N2")</p>
+        <button class="btn-principal" @onclick="@(() => Nav.NavigateTo("/"))">Seguir comprando</button>
+        <button class="btn-sec" @onclick="@(() => Nav.NavigateTo("/mis-compras"))">Ver mis compras</button>
+    </div>
+}
+else if (CarritoSvc.EstaVacio)
+{
+    <p class="estado">Tu carrito está vacío.</p>
+    <button class="btn-principal" @onclick="@(() => Nav.NavigateTo("/"))">Ir al catálogo</button>
+}
+else
+{
+    @foreach (var item in CarritoSvc.Items)
+    {
+        <div class="linea">
+            <div class="linea-info">
+                <div class="linea-nombre">@item.Producto.Nombre</div>
+                <div class="linea-precio">$ @item.Producto.Precio.ToString("N2") c/u</div>
+            </div>
+            <div class="cant">
+                <button @onclick="() => Cambiar(item.Producto.Id, item.Cantidad - 1)">−</button>
+                <span>@item.Cantidad</span>
+                <button @onclick="() => Cambiar(item.Producto.Id, item.Cantidad + 1)">+</button>
+            </div>
+            <div class="linea-sub">$ @item.Subtotal.ToString("N2")</div>
+            <button class="quitar" @onclick="() => CarritoSvc.Quitar(item.Producto.Id)">✕</button>
+        </div>
+    }
+
+    <p class="total">Total estimado: $ @CarritoSvc.Total.ToString("N2")</p>
+    <p class="nota">El precio final lo confirma el servidor al comprar.</p>
+
+    @if (_error is not null)
+    {
+        <div class="error">@_error</div>
+    }
+
+    @if (!Sesion.EstaLogueado)
+    {
+        <div class="aviso-login">
+            Para finalizar la compra tenés que ingresar.
+            <button class="btn-principal" @onclick="@(() => Nav.NavigateTo("/login"))">Ingresar</button>
+        </div>
+    }
+    else
+    {
+        <h2>Datos de envío</h2>
+        <div class="campo"><label>Nombre y apellido *</label><input @bind="_dto.Nombre" /></div>
+        <div class="campo"><label>DNI</label><input @bind="_dto.DNI" /></div>
+        <div class="campo"><label>Teléfono</label><input @bind="_dto.Telefono" /></div>
+        <div class="campo"><label>Dirección *</label><input @bind="_dto.Direccion" /></div>
+
+        <h2>Forma de pago (simulada)</h2>
+        <div class="campo">
+            <select @bind="_dto.MetodoPago">
+                <option value="Tarjeta">Tarjeta</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Efectivo">Efectivo</option>
+            </select>
+        </div>
+
+        @if (_dto.MetodoPago == "Tarjeta")
+        {
+            <div class="campo">
+                <label>Número de tarjeta</label>
+                <input @bind="_dto.NumeroTarjeta" inputmode="numeric" maxlength="19" placeholder="4111 1111 1111 1111" />
+            </div>
+            <div class="campo">
+                <label>CVV</label>
+                <input @bind="_dto.Cvv" inputmode="numeric" maxlength="4" type="password" />
+            </div>
+        }
+
+        <button class="btn-principal" @onclick="ComprarAsync" disabled="@_procesando">
+            @(_procesando ? "Procesando pago..." : $"Pagar $ {CarritoSvc.Total:N2}")
+        </button>
+    }
+}
+
+<style>
+    .estado { color: #666; }
+    .linea { display: flex; align-items: center; gap: .75rem; padding: .75rem 0; border-bottom: 1px solid #eee; flex-wrap: wrap; }
+    .linea-info { flex: 1; min-width: 140px; }
+    .linea-nombre { font-weight: 600; }
+    .linea-precio { color: #777; font-size: .85rem; }
+    .cant { display: flex; align-items: center; gap: .5rem; }
+    .cant button { width: 32px; height: 32px; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .linea-sub { min-width: 90px; text-align: right; font-weight: 600; }
+    .quitar { border: none; background: transparent; color: #b00020; cursor: pointer; font-size: 1.1rem; }
+    .total { font-size: 1.3rem; font-weight: 700; margin-top: 1rem; }
+    .nota { color: #777; font-size: .85rem; }
+    .campo { display: flex; flex-direction: column; margin-bottom: .75rem; max-width: 420px; }
+    .campo label { font-weight: 600; margin-bottom: .25rem; }
+    .campo input, .campo select { padding: .6rem; border: 1px solid #bbb; border-radius: 8px; font-size: 1rem; }
+    .error { background: #fde8e8; color: #b00020; padding: .6rem; border-radius: 8px; margin: 1rem 0; }
+    .exito { background: #e6f4ea; border-radius: 12px; padding: 1rem 1.25rem; }
+    .aviso-login { background: #fef3e0; padding: 1rem; border-radius: 8px; margin: 1rem 0; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+    .btn-principal { padding: .7rem 1.2rem; border: none; border-radius: 8px; background: #1a73e8; color: #fff; font-size: 1rem; cursor: pointer; }
+    .btn-principal:disabled { opacity: .6; }
+    .btn-sec { padding: .7rem 1.2rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; font-size: 1rem; cursor: pointer; margin-left: .5rem; }
+</style>
+
+@code {
+    private readonly CompraCreateDto _dto = new() { MetodoPago = "Tarjeta" };
+    private CompraResultadoDto? _compra;
+    private string? _error;
+    private bool _procesando;
+
+    private void Cambiar(int productoId, int cantidad)
+    {
+        _error = CarritoSvc.CambiarCantidad(productoId, cantidad);
+    }
+
+    private async Task ComprarAsync()
+    {
+        if (_procesando) return;
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_dto.Nombre) || string.IsNullOrWhiteSpace(_dto.Direccion))
+        {
+            _error = "Completá nombre y dirección.";
+            return;
+        }
+
+        if (_dto.MetodoPago == "Tarjeta")
+        {
+            if (string.IsNullOrWhiteSpace(_dto.NumeroTarjeta) || string.IsNullOrWhiteSpace(_dto.Cvv))
+            {
+                _error = "Completá el número de tarjeta y el CVV.";
+                return;
+            }
+        }
+        else
+        {
+            // Solo la tarjeta lleva estos datos.
+            _dto.NumeroTarjeta = null;
+            _dto.Cvv = null;
+        }
+
+        _dto.Items = CarritoSvc.ComoItemsDeCompra();
+        _procesando = true;
+
+        var r = await Api.ComprarAsync(_dto);
+
+        _procesando = false;
+
+        if (r.Ok && r.Data is not null)
+        {
+            _compra = r.Data;
+            CarritoSvc.Vaciar();
+            _dto.NumeroTarjeta = null;
+            _dto.Cvv = null;
+        }
+        else
+        {
+            _error = r.Error;
+        }
+    }
+}

@@ -1,0 +1,31 @@
+﻿@inject SessionService Sesion
+
+@if (!_listo)
+{
+    <div style="padding:2rem;text-align:center;">Cargando...</div>
+}
+else
+{
+    <Router AppAssembly="@typeof(MauiProgram).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(Layout.MainLayout)">
+                <p role="alert">No se encontró la página.</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+}
+
+@code {
+    private bool _listo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Recupera el token guardado (si existe y no venció) antes de mostrar nada.
+        await Sesion.InicializarAsync();
+        _listo = true;
+    }
+}

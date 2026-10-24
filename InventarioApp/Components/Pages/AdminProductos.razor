@@ -1,0 +1,324 @@
+@page "/admin/productos"
+@inject ApiClient Api
+@inject SessionService Sesion
+
+<PageTitle>Administrar productos</PageTitle>
+
+<h1>Productos</h1>
+
+@if (!Sesion.EsPersonal)
+{
+    <div class="error">Esta sección es solo para Admin y Vendedor.</div>
+}
+else
+{
+    @if (_aviso is not null) { <div class="aviso">@_aviso</div> }
+    @if (_error is not null) { <div class="error">@_error</div> }
+
+    @if (_editando is not null)
+    {
+        <div class="form">
+            <h2>@(_editandoId == 0 ? "Nuevo producto" : $"Editar producto #{_editandoId}")</h2>
+
+            <div class="campo"><label>Nombre *</label><input @bind="_editando.Nombre" /></div>
+            <div class="campo"><label>Descripción</label><input @bind="_editando.Descripcion" /></div>
+            <div class="fila">
+                <div class="campo"><label>Precio *</label><input type="number" step="0.01" min="0" @bind="_editando.Precio" /></div>
+                <div class="campo"><label>Stock</label><input type="number" min="0" @bind="_editando.Stock" /></div>
+            </div>
+            <div class="campo">
+                <label>Categoría *</label>
+                <select @bind="_editando.CategoriaId">
+                    <option value="0">Seleccionar...</option>
+                    @foreach (var c in _categorias)
+                    {
+                        <option value="@c.Id">@c.Nombre</option>
+                    }
+                </select>
+            </div>
+            <label class="check"><input type="checkbox" @bind="_editando.Activo" /> Activo (visible en el catálogo)</label>
+
+            <div class="campo">
+                <label>Imagen</label>
+                <div class="fila">
+                    <button class="btn-sec" @onclick="ElegirImagenAsync">Elegir imagen...</button>
+                    <span class="nota">@(_imagen is null ? "Sin cambios" : _imagen.FileName)</span>
+                </div>
+            </div>
+
+            <div class="fila">
+                <button class="btn-principal" @onclick="GuardarAsync" disabled="@_guardando">
+                    @(_guardando ? "Guardando..." : "Guardar")
+                </button>
+                <button class="btn-sec" @onclick="Cancelar" disabled="@_guardando">Cancelar</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="barra">
+            <input placeholder="Buscar..." @bind="_buscar" @bind:event="oninput" @onkeydown="OnKeyDown" />
+            <button class="btn-sec" @onclick="BuscarAsync">Buscar</button>
+            <button class="btn-principal" @onclick="Nuevo">+ Nuevo</button>
+        </div>
+    }
+
+    @if (_cargando)
+    {
+        <p class="nota">Cargando...</p>
+    }
+    else if (_resultado is not null)
+    {
+        <p class="nota">@_resultado.TotalRegistros producto(s) (incluye dados de baja)</p>
+
+        @foreach (var p in _resultado.Items)
+        {
+            <div class="fila-prod @(p.Activo ? "" : "inactivo")">
+                <div class="mini">
+                    @if (!string.IsNullOrEmpty(p.ImagenUrl))
+                    {
+                        <img src="@ApiConfig.ResolverUrl(p.ImagenUrl)" alt="" />
+                    }
+                </div>
+                <div class="info">
+                    <div><strong>@p.Nombre</strong> @if (!p.Activo) { <span class="badge">De baja</span> }</div>
+                    <div class="nota">$ @p.Precio.ToString("N2") · Stock: @p.Stock · @p.CategoriaNombre</div>
+                </div>
+                <div class="acc">
+                    <button class="btn-sec" @onclick="() => Editar(p)">Editar</button>
+                    @if (_confirmarId == p.Id)
+                    {
+                        <button class="btn-peligro" @onclick="() => EliminarAsync(p)">¿Seguro?</button>
+                    }
+                    else if (p.Activo)
+                    {
+                        <button class="btn-peligro-sec" @onclick="() => _confirmarId = p.Id">Baja</button>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (_resultado.TotalPaginas > 1)
+        {
+            <div class="paginacion">
+                <button disabled="@(_pagina <= 1)" @onclick="() => IrAPaginaAsync(_pagina - 1)">← Anterior</button>
+                <span>Página @_resultado.PaginaActual de @_resultado.TotalPaginas</span>
+                <button disabled="@(_pagina >= _resultado.TotalPaginas)" @onclick="() => IrAPaginaAsync(_pagina + 1)">Siguiente →</button>
+            </div>
+        }
+    }
+}
+
+<style>
+    .error { background: #fde8e8; color: #b00020; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .aviso { background: #e6f4ea; color: #137333; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .nota { color: #777; font-size: .85rem; }
+    .barra { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .barra input { flex: 1; min-width: 140px; padding: .6rem; border: 1px solid #bbb; border-radius: 8px; }
+    .form { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; background: #fafafa; max-width: 520px; }
+    .campo { display: flex; flex-direction: column; margin-bottom: .75rem; flex: 1; }
+    .campo label { font-weight: 600; margin-bottom: .25rem; }
+    .campo input, .campo select { padding: .6rem; border: 1px solid #bbb; border-radius: 8px; font-size: 1rem; }
+    .fila { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+    .check { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+    .btn-principal { padding: .6rem 1.1rem; border: none; border-radius: 8px; background: #1a73e8; color: #fff; cursor: pointer; }
+    .btn-principal:disabled { opacity: .6; }
+    .btn-sec { padding: .6rem 1.1rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .btn-peligro { padding: .6rem 1.1rem; border: none; border-radius: 8px; background: #b00020; color: #fff; cursor: pointer; }
+    .btn-peligro-sec { padding: .6rem 1.1rem; border: 1px solid #b00020; border-radius: 8px; background: #fff; color: #b00020; cursor: pointer; }
+    .fila-prod { display: flex; align-items: center; gap: .75rem; padding: .6rem 0; border-bottom: 1px solid #eee; flex-wrap: wrap; }
+    .fila-prod.inactivo { opacity: .55; }
+    .mini { width: 52px; height: 52px; background: #f0f0f0; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+    .mini img { width: 100%; height: 100%; object-fit: cover; }
+    .info { flex: 1; min-width: 150px; }
+    .acc { display: flex; gap: .4rem; }
+    .badge { background: #fde8e8; color: #b00020; font-size: .7rem; padding: .1rem .4rem; border-radius: 6px; }
+    .paginacion { display: flex; justify-content: center; align-items: center; gap: 1rem; margin: 1.5rem 0; }
+    .paginacion button { padding: .5rem 1rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .paginacion button:disabled { opacity: .4; }
+</style>
+
+@code {
+    private PagedResult<ProductoDto>? _resultado;
+    private List<CategoriaDto> _categorias = new();
+    private ProductoCreateDto? _editando;
+    private int _editandoId;
+    private FileResult? _imagen;
+    private string _buscar = "";
+    private string? _error;
+    private string? _aviso;
+    private bool _cargando;
+    private bool _guardando;
+    private int _pagina = 1;
+    private int _confirmarId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Sesion.EsPersonal) return;
+
+        var cats = await Api.GetCategoriasAsync();
+        if (cats.Ok && cats.Data is not null) _categorias = cats.Data;
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        StateHasChanged();
+
+        var r = await Api.GetProductosAsync(new FiltroProductos
+        {
+            Pagina = _pagina,
+            TamanioPagina = 10,
+            Buscar = _buscar,
+            IncluirInactivos = true
+        });
+
+        _cargando = false;
+        if (r.Ok) _resultado = r.Data;
+        else _error = r.Error;
+    }
+
+    private Task BuscarAsync()
+    {
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private Task IrAPaginaAsync(int pagina)
+    {
+        _pagina = pagina;
+        return CargarAsync();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await BuscarAsync();
+    }
+
+    private void Nuevo()
+    {
+        LimpiarMensajes();
+        _editandoId = 0;
+        _editando = new ProductoCreateDto { Activo = true };
+        _imagen = null;
+    }
+
+    private void Editar(ProductoDto p)
+    {
+        LimpiarMensajes();
+        _editandoId = p.Id;
+        _editando = p.ComoCreateDto();
+        _imagen = null;
+    }
+
+    private void Cancelar()
+    {
+        _editando = null;
+        _imagen = null;
+    }
+
+    private void LimpiarMensajes()
+    {
+        _error = null;
+        _aviso = null;
+        _confirmarId = 0;
+    }
+
+    private async Task ElegirImagenAsync()
+    {
+        try
+        {
+            _imagen = await FilePicker.Default.PickAsync(new PickOptions
+            {
+                PickerTitle = "Elegí una imagen",
+                FileTypes = FilePickerFileType.Images
+            });
+        }
+        catch (Exception)
+        {
+            _error = "No se pudo abrir el selector de imágenes.";
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_editando is null || _guardando) return;
+        _error = null;
+        _aviso = null;
+
+        if (string.IsNullOrWhiteSpace(_editando.Nombre))
+        {
+            _error = "El nombre es obligatorio.";
+            return;
+        }
+        if (_editando.CategoriaId <= 0)
+        {
+            _error = "Elegí una categoría.";
+            return;
+        }
+
+        _guardando = true;
+
+        int productoId = _editandoId;
+        string? errorGuardado = null;
+
+        if (_editandoId == 0)
+        {
+            var r = await Api.CrearProductoAsync(_editando);
+            if (r.Ok && r.Data is not null) productoId = r.Data.Id;
+            else errorGuardado = r.Error;
+        }
+        else
+        {
+            var r = await Api.ActualizarProductoAsync(_editandoId, _editando);
+            if (!r.Ok) errorGuardado = r.Error;
+        }
+
+        if (errorGuardado is not null)
+        {
+            _guardando = false;
+            _error = errorGuardado;
+            return;
+        }
+
+        // Si se eligió una imagen, se sube una vez que el producto existe.
+        string? errorImagen = null;
+        if (_imagen is not null)
+        {
+            try
+            {
+                using var stream = await _imagen.OpenReadAsync();
+                var ri = await Api.SubirImagenProductoAsync(productoId, stream, _imagen.FileName);
+                if (!ri.Ok) errorImagen = ri.Error;
+            }
+            catch (Exception)
+            {
+                errorImagen = "No se pudo leer la imagen elegida.";
+            }
+        }
+
+        _guardando = false;
+        _editando = null;
+        _imagen = null;
+
+        if (errorImagen is null) _aviso = "Producto guardado.";
+        else _error = $"El producto se guardó, pero la imagen falló: {errorImagen}";
+
+        await CargarAsync();
+    }
+
+    private async Task EliminarAsync(ProductoDto p)
+    {
+        LimpiarMensajes();
+
+        var r = await Api.EliminarProductoAsync(p.Id);
+        if (r.Ok)
+            _aviso = r.Data?.Mensaje ?? $"Se eliminó '{p.Nombre}'.";
+        else
+            _error = r.Error;
+
+        await CargarAsync();
+    }
+}

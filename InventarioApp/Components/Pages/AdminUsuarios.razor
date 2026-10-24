@@ -1,0 +1,175 @@
+@page "/admin/usuarios"
+@inject UsuariosClient Usuarios
+@inject SessionService Sesion
+
+<PageTitle>Usuarios y roles</PageTitle>
+
+<h1>Usuarios y roles</h1>
+
+@if (!Sesion.EsAdmin)
+{
+    <div class="error">Esta sección es solo para Admin.</div>
+}
+else
+{
+    @if (_aviso is not null) { <div class="aviso">@_aviso</div> }
+    @if (_error is not null) { <div class="error">@_error</div> }
+
+    @if (_creando)
+    {
+        <div class="form">
+            <h2>Nuevo usuario</h2>
+            <div class="campo"><label>Usuario *</label><input @bind="_nuevo.NombreUsuario" /></div>
+            <div class="campo"><label>Email</label><input type="email" @bind="_nuevo.Email" /></div>
+            <div class="campo"><label>Contraseña * (mín. 6)</label><input type="password" @bind="_nuevo.Password" /></div>
+            <div class="campo">
+                <label>Rol</label>
+                <select @bind="_nuevo.Rol">
+                    @foreach (var r in RolesApp.Todos)
+                    {
+                        <option value="@r">@r</option>
+                    }
+                </select>
+            </div>
+            <div class="fila">
+                <button class="btn-principal" @onclick="CrearAsync" disabled="@_guardando">
+                    @(_guardando ? "Creando..." : "Crear")
+                </button>
+                <button class="btn-sec" @onclick="() => _creando = false" disabled="@_guardando">Cancelar</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <button class="btn-principal" @onclick="NuevoUsuario">+ Nuevo usuario</button>
+    }
+
+    @if (_cargando)
+    {
+        <p class="nota">Cargando...</p>
+    }
+    else
+    {
+        <p class="nota">@_usuarios.Count usuario(s). Cambiá el rol con el selector; no podés quitarte tu propio rol de Admin.</p>
+
+        @foreach (var u in _usuarios)
+        {
+            <div class="fila-usr">
+                <div class="info">
+                    <strong>@u.NombreUsuario</strong>
+                    @if (u.NombreUsuario == Sesion.Usuario) { <span class="yo">vos</span> }
+                    <div class="nota">@(string.IsNullOrEmpty(u.Email) ? "sin email" : u.Email)</div>
+                </div>
+                <select value="@u.Rol" @onchange="e => CambiarRolAsync(u, e.Value?.ToString())">
+                    @foreach (var r in RolesApp.Todos)
+                    {
+                        <option value="@r" selected="@(r == u.Rol)">@r</option>
+                    }
+                </select>
+            </div>
+        }
+    }
+}
+
+<style>
+    .error { background: #fde8e8; color: #b00020; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .aviso { background: #e6f4ea; color: #137333; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .nota { color: #777; font-size: .85rem; }
+    .form { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; background: #fafafa; max-width: 420px; }
+    .campo { display: flex; flex-direction: column; margin-bottom: .75rem; }
+    .campo label { font-weight: 600; margin-bottom: .25rem; font-size: .85rem; }
+    .campo input, .campo select { padding: .6rem; border: 1px solid #bbb; border-radius: 8px; font-size: 1rem; }
+    .fila { display: flex; gap: .5rem; }
+    .btn-principal { padding: .6rem 1.1rem; border: none; border-radius: 8px; background: #1a73e8; color: #fff; cursor: pointer; margin-bottom: 1rem; }
+    .btn-principal:disabled { opacity: .6; }
+    .btn-sec { padding: .6rem 1.1rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .fila-usr { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .7rem 0; border-bottom: 1px solid #eee; flex-wrap: wrap; }
+    .fila-usr .info { flex: 1; min-width: 150px; }
+    .fila-usr select { padding: .5rem; border: 1px solid #bbb; border-radius: 8px; }
+    .yo { background: #e8f0fe; color: #1a73e8; font-size: .7rem; padding: .1rem .4rem; border-radius: 6px; margin-left: .3rem; }
+</style>
+
+@code {
+    private List<UsuarioListadoDto> _usuarios = new();
+    private UsuarioAdminCreateDto _nuevo = new();
+    private string? _error;
+    private string? _aviso;
+    private bool _cargando;
+    private bool _guardando;
+    private bool _creando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sesion.EsAdmin) await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        StateHasChanged();
+
+        var r = await Usuarios.GetUsuariosAsync();
+        _cargando = false;
+
+        if (r.Ok && r.Data is not null) _usuarios = r.Data;
+        else _error = r.Error;
+    }
+
+    private void NuevoUsuario()
+    {
+        _error = null;
+        _aviso = null;
+        _nuevo = new UsuarioAdminCreateDto { Rol = "Cliente" };
+        _creando = true;
+    }
+
+    private async Task CrearAsync()
+    {
+        if (_guardando) return;
+        _error = null;
+        _aviso = null;
+
+        if (string.IsNullOrWhiteSpace(_nuevo.NombreUsuario))
+        {
+            _error = "El usuario es obligatorio.";
+            return;
+        }
+        if (_nuevo.Password is null || _nuevo.Password.Length < 6)
+        {
+            _error = "La contraseña debe tener al menos 6 caracteres.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_nuevo.Email)) _nuevo.Email = null;
+
+        _guardando = true;
+        var r = await Usuarios.CrearUsuarioAsync(_nuevo);
+        _guardando = false;
+
+        if (r.Ok)
+        {
+            _aviso = $"Usuario '{_nuevo.NombreUsuario}' creado como {_nuevo.Rol}.";
+            _creando = false;
+            await CargarAsync();
+        }
+        else
+        {
+            _error = r.Error;
+        }
+    }
+
+    private async Task CambiarRolAsync(UsuarioListadoDto u, string? rol)
+    {
+        _error = null;
+        _aviso = null;
+        if (string.IsNullOrEmpty(rol) || rol == u.Rol) return;
+
+        var r = await Usuarios.CambiarRolAsync(u.Id, rol);
+        if (r.Ok)
+            _aviso = $"'{u.NombreUsuario}' ahora es {rol}.";
+        else
+            _error = r.Error;
+
+        // Recarga para reflejar el estado real (y revertir el selector si falló).
+        await CargarAsync();
+    }
+}

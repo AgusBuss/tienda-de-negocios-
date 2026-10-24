@@ -1,0 +1,128 @@
+@page "/mis-compras"
+@inject ApiClient Api
+@inject SessionService Sesion
+@inject NavigationManager Nav
+
+<PageTitle>Mis compras</PageTitle>
+
+<h1>Mis compras</h1>
+
+@if (!Sesion.EstaLogueado)
+{
+    <p class="estado">Tenés que ingresar para ver tus compras.</p>
+    <button class="btn-principal" @onclick="@(() => Nav.NavigateTo("/login"))">Ingresar</button>
+}
+else if (_cargando)
+{
+    <p class="estado">Cargando compras...</p>
+}
+else if (_error is not null)
+{
+    <div class="error">@_error</div>
+}
+else if (_resultado is null || _resultado.Items.Count == 0)
+{
+    <p class="estado">Todavía no realizaste ninguna compra.</p>
+    <button class="btn-principal" @onclick="@(() => Nav.NavigateTo("/"))">Ir al catálogo</button>
+}
+else
+{
+    @foreach (var c in _resultado.Items)
+    {
+        <div class="compra">
+            <div class="compra-cab" @onclick="() => Alternar(c.VentaId)">
+                <div>
+                    <strong>Compra N° @c.VentaId</strong>
+                    <div class="fecha">@c.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                </div>
+                <div class="der">
+                    <div class="monto">$ @c.Total.ToString("N2")</div>
+                    <div class="fecha">@c.MetodoPago @(_abierta == c.VentaId ? "▲" : "▼")</div>
+                </div>
+            </div>
+
+            @if (_abierta == c.VentaId)
+            {
+                <div class="compra-det">
+                    @if (!string.IsNullOrEmpty(c.UltimosDigitos))
+                    {
+                        <div class="fecha">Tarjeta terminada en @c.UltimosDigitos</div>
+                    }
+                    @if (!string.IsNullOrEmpty(c.Referencia))
+                    {
+                        <div class="fecha">Referencia: @c.Referencia</div>
+                    }
+                    <ul>
+                        @foreach (var i in c.Items)
+                        {
+                            <li>@i.Cantidad × @i.ProductoNombre — $ @i.Subtotal.ToString("N2")</li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+    }
+
+    @if (_resultado.TotalPaginas > 1)
+    {
+        <div class="paginacion">
+            <button disabled="@(_pagina <= 1)" @onclick="() => IrAPaginaAsync(_pagina - 1)">← Anterior</button>
+            <span>Página @_resultado.PaginaActual de @_resultado.TotalPaginas</span>
+            <button disabled="@(_pagina >= _resultado.TotalPaginas)" @onclick="() => IrAPaginaAsync(_pagina + 1)">Siguiente →</button>
+        </div>
+    }
+}
+
+<style>
+    .estado { color: #666; }
+    .error { background: #fde8e8; color: #b00020; padding: .6rem; border-radius: 8px; margin: 1rem 0; }
+    .compra { border: 1px solid #e0e0e0; border-radius: 12px; margin-bottom: .75rem; overflow: hidden; }
+    .compra-cab { display: flex; justify-content: space-between; align-items: center; padding: .9rem 1rem; cursor: pointer; background: #fafafa; }
+    .compra-det { padding: .75rem 1rem; }
+    .fecha { color: #777; font-size: .85rem; }
+    .der { text-align: right; }
+    .monto { font-weight: 700; font-size: 1.1rem; }
+    .paginacion { display: flex; justify-content: center; align-items: center; gap: 1rem; margin: 1.5rem 0; }
+    .paginacion button { padding: .5rem 1rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .paginacion button:disabled { opacity: .4; }
+    .btn-principal { padding: .7rem 1.2rem; border: none; border-radius: 8px; background: #1a73e8; color: #fff; font-size: 1rem; cursor: pointer; }
+</style>
+
+@code {
+    private PagedResult<CompraResultadoDto>? _resultado;
+    private string? _error;
+    private bool _cargando;
+    private int _pagina = 1;
+    private int? _abierta;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sesion.EstaLogueado)
+            await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _error = null;
+        StateHasChanged();
+
+        var r = await Api.GetMisComprasAsync(_pagina, 10);
+
+        _cargando = false;
+        if (r.Ok) _resultado = r.Data;
+        else _error = r.Error;
+    }
+
+    private Task IrAPaginaAsync(int pagina)
+    {
+        _pagina = pagina;
+        _abierta = null;
+        return CargarAsync();
+    }
+
+    private void Alternar(int ventaId)
+    {
+        _abierta = _abierta == ventaId ? null : ventaId;
+    }
+}

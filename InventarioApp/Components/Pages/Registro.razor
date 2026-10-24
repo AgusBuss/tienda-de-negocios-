@@ -1,0 +1,111 @@
+@page "/registro"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Crear cuenta</PageTitle>
+
+<div class="login-box">
+    <h1>Crear cuenta</h1>
+
+    <div class="campo">
+        <label for="usuario">Usuario</label>
+        <input id="usuario" @bind="_usuario" autocomplete="username" />
+    </div>
+
+    <div class="campo">
+        <label for="email">Email (opcional)</label>
+        <input id="email" type="email" @bind="_email" autocomplete="email" />
+    </div>
+
+    <div class="campo">
+        <label for="password">Contraseña</label>
+        <input id="password" type="password" @bind="_password" autocomplete="new-password" />
+    </div>
+
+    <div class="campo">
+        <label for="password2">Repetir contraseña</label>
+        <input id="password2" type="password" @bind="_password2" autocomplete="new-password"
+               @onkeydown="OnKeyDown" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="error">@_error</div>
+    }
+
+    <button class="btn-principal" @onclick="RegistrarAsync" disabled="@_cargando">
+        @(_cargando ? "Creando cuenta..." : "Crear cuenta")
+    </button>
+
+    <p class="aparte">¿Ya tenés cuenta? <a href="/login">Ingresar</a></p>
+</div>
+
+<style>
+    .login-box { max-width: 380px; margin: 2rem auto; padding: 1.5rem; border: 1px solid #ddd; border-radius: 12px; }
+    .campo { margin-bottom: 1rem; display: flex; flex-direction: column; }
+    .campo label { font-weight: 600; margin-bottom: .25rem; }
+    .campo input { padding: .6rem; border: 1px solid #bbb; border-radius: 8px; font-size: 1rem; }
+    .error { background: #fde8e8; color: #b00020; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .btn-principal { width: 100%; padding: .7rem; border: none; border-radius: 8px; background: #1a73e8; color: #fff; font-size: 1rem; cursor: pointer; }
+    .btn-principal:disabled { opacity: .6; }
+    .aparte { text-align: center; margin-top: 1rem; }
+</style>
+
+@code {
+    private string _usuario = "";
+    private string _email = "";
+    private string _password = "";
+    private string _password2 = "";
+    private string? _error;
+    private bool _cargando;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await RegistrarAsync();
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (_cargando) return;
+
+        if (string.IsNullOrWhiteSpace(_usuario) || string.IsNullOrWhiteSpace(_password))
+        {
+            _error = "Completá usuario y contraseña.";
+            return;
+        }
+        if (_password.Length < 6)
+        {
+            _error = "La contraseña debe tener al menos 6 caracteres.";
+            return;
+        }
+        if (_password != _password2)
+        {
+            _error = "Las contraseñas no coinciden.";
+            return;
+        }
+
+        _error = null;
+        _cargando = true;
+
+        var r = await Api.RegistrarAsync(new RegistroRequest
+        {
+            NombreUsuario = _usuario.Trim(),
+            Password = _password,
+            Email = string.IsNullOrWhiteSpace(_email) ? null : _email.Trim()
+        });
+
+        if (r.Ok)
+        {
+            // Si el registro no devolvió token, se inicia sesión con los mismos datos.
+            if (string.IsNullOrEmpty(r.Data?.Token))
+                r = await Api.LoginAsync(_usuario.Trim(), _password);
+        }
+
+        _cargando = false;
+
+        if (r.Ok)
+            Nav.NavigateTo("/");
+        else
+            _error = r.Error;
+    }
+}

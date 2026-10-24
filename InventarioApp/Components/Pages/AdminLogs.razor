@@ -1,0 +1,154 @@
+@page "/admin/logs"
+@inject LogsClient Logs
+@inject SessionService Sesion
+
+<PageTitle>Logs y auditoría</PageTitle>
+
+<h1>Logs y auditoría</h1>
+
+@if (!Sesion.EsAdmin)
+{
+    <div class="error">Esta sección es solo para Admin.</div>
+}
+else
+{
+    <div class="tabs">
+        <button class="@(_tab == "auditoria" ? "tab activa" : "tab")" @onclick='() => CambiarTabAsync("auditoria")'>Auditoría</button>
+        <button class="@(_tab == "errores" ? "tab activa" : "tab")" @onclick='() => CambiarTabAsync("errores")'>Errores</button>
+    </div>
+
+    @if (_error is not null) { <div class="error">@_error</div> }
+
+    @if (_cargando)
+    {
+        <p class="nota">Cargando...</p>
+    }
+    else if (_tab == "auditoria")
+    {
+        @if (_auditoria is null || _auditoria.Items.Count == 0)
+        {
+            <p class="nota">No hay registros de auditoría.</p>
+        }
+        else
+        {
+            <p class="nota">@_auditoria.TotalRegistros registro(s)</p>
+            @foreach (var a in _auditoria.Items)
+            {
+                <div class="item">
+                    <div class="cab">
+                        <strong>@a.Accion</strong> · @a.Entidad@(a.EntidadId is null ? "" : $" #{a.EntidadId}")
+                        <span class="nota"> — @a.UsuarioNombre</span>
+                    </div>
+                    <div class="nota">@a.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</div>
+                    @if (!string.IsNullOrEmpty(a.Detalle))
+                    {
+                        <div class="detalle">@a.Detalle</div>
+                    }
+                </div>
+            }
+            @Paginacion(_auditoria.PaginaActual, _auditoria.TotalPaginas)
+        }
+    }
+    else
+    {
+        @if (_errores is null || _errores.Items.Count == 0)
+        {
+            <p class="nota">No hay errores registrados.</p>
+        }
+        else
+        {
+            <p class="nota">@_errores.TotalRegistros error(es)</p>
+            @foreach (var e in _errores.Items)
+            {
+                <div class="item err" @onclick="() => Alternar(e.Id)">
+                    <div class="cab">
+                        <strong>@e.StatusCode</strong> · @e.Metodo @e.Ruta
+                    </div>
+                    <div class="nota">@e.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</div>
+                    <div class="detalle">@e.Mensaje</div>
+                    @if (_abierto == e.Id && !string.IsNullOrEmpty(e.StackTrace))
+                    {
+                        <pre class="stack">@e.StackTrace</pre>
+                    }
+                    else if (!string.IsNullOrEmpty(e.StackTrace))
+                    {
+                        <div class="nota">Tocá para ver el detalle técnico</div>
+                    }
+                </div>
+            }
+            @Paginacion(_errores.PaginaActual, _errores.TotalPaginas)
+        }
+    }
+}
+
+@code {
+    private RenderFragment Paginacion(int actual, int total) => __builder =>
+    {
+        if (total <= 1) return;
+        <div class="paginacion">
+            <button disabled="@(actual <= 1)" @onclick="() => IrAPaginaAsync(actual - 1)">← Anterior</button>
+            <span>Página @actual de @total</span>
+            <button disabled="@(actual >= total)" @onclick="() => IrAPaginaAsync(actual + 1)">Siguiente →</button>
+        </div>
+    };
+}
+
+<style>
+    .error { background: #fde8e8; color: #b00020; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .nota { color: #777; font-size: .85rem; }
+    .tabs { display: flex; gap: .5rem; margin-bottom: 1rem; }
+    .tab { padding: .55rem 1.1rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .tab.activa { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+    .item { border: 1px solid #e0e0e0; border-radius: 10px; padding: .7rem .9rem; margin-bottom: .6rem; }
+    .item.err { border-left: 4px solid #b00020; cursor: pointer; }
+    .detalle { margin-top: .3rem; word-break: break-word; }
+    .stack { background: #f6f6f6; padding: .6rem; border-radius: 8px; font-size: .75rem; overflow-x: auto; white-space: pre-wrap; }
+    .paginacion { display: flex; justify-content: center; align-items: center; gap: 1rem; margin: 1.5rem 0; }
+    .paginacion button { padding: .5rem 1rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .paginacion button:disabled { opacity: .4; }
+</style>
+
+@code {
+    private string _tab = "auditoria";
+    private PagedResult<AuditoriaDto>? _auditoria;
+    private PagedResult<LogErrorDto>? _errores;
+    private string? _error;
+    private bool _cargando;
+    private int _abierto;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sesion.EsAdmin) await CargarAsync(1);
+    }
+
+    private async Task CambiarTabAsync(string tab)
+    {
+        _tab = tab;
+        _abierto = 0;
+        await CargarAsync(1);
+    }
+
+    private Task IrAPaginaAsync(int pagina) => CargarAsync(pagina);
+
+    private void Alternar(int id) => _abierto = _abierto == id ? 0 : id;
+
+    private async Task CargarAsync(int pagina)
+    {
+        _cargando = true;
+        _error = null;
+        StateHasChanged();
+
+        if (_tab == "auditoria")
+        {
+            var r = await Logs.GetAuditoriaAsync(pagina, 20);
+            if (r.Ok) _auditoria = r.Data; else _error = r.Error;
+        }
+        else
+        {
+            var r = await Logs.GetErroresAsync(pagina, 20);
+            if (r.Ok) _errores = r.Data; else _error = r.Error;
+        }
+
+        _cargando = false;
+    }
+}

@@ -1,0 +1,117 @@
+@page "/admin/reportes"
+@inject ReportesClient Reportes
+@inject SessionService Sesion
+
+<PageTitle>Reportes</PageTitle>
+
+<h1>Reportes</h1>
+
+@if (!Sesion.EsPersonal)
+{
+    <div class="error">Esta sección es solo para Admin y Vendedor.</div>
+}
+else
+{
+    @if (_aviso is not null) { <div class="aviso">@_aviso</div> }
+    @if (_error is not null) { <div class="error">@_error</div> }
+
+    <div class="form">
+        <div class="campo">
+            <label>Tipo de reporte</label>
+            <select @bind="_tipo">
+                <option value="stock">Stock actual</option>
+                <option value="entradas">Entradas de mercadería</option>
+                <option value="salidas">Salidas (ventas)</option>
+            </select>
+        </div>
+
+        @if (_tipo != "stock")
+        {
+            <div class="fila">
+                <div class="campo">
+                    <label>Desde</label>
+                    <input type="date" @bind="_desde" />
+                </div>
+                <div class="campo">
+                    <label>Hasta</label>
+                    <input type="date" @bind="_hasta" />
+                </div>
+            </div>
+            <p class="nota">Si no cambiás las fechas, se usan los últimos 30 días. Máximo 1 año.</p>
+        }
+
+        <div class="campo">
+            <label>Enviar a (opcional)</label>
+            <input type="email" placeholder="Vacío = tu email de usuario" @bind="_destinatario" />
+        </div>
+
+        <div class="fila">
+            <button class="btn-principal" @onclick="DescargarAsync" disabled="@_ocupado">
+                @(_ocupado ? "Procesando..." : "Descargar PDF")
+            </button>
+            <button class="btn-sec" @onclick="EnviarAsync" disabled="@_ocupado">
+                Enviar por correo
+            </button>
+        </div>
+    </div>
+}
+
+<style>
+    .error { background: #fde8e8; color: #b00020; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .aviso { background: #e6f4ea; color: #137333; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .nota { color: #777; font-size: .85rem; }
+    .form { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; max-width: 520px; background: #fafafa; }
+    .campo { display: flex; flex-direction: column; margin-bottom: .75rem; flex: 1; }
+    .campo label { font-weight: 600; margin-bottom: .25rem; font-size: .85rem; }
+    .campo input, .campo select { padding: .6rem; border: 1px solid #bbb; border-radius: 8px; font-size: 1rem; }
+    .fila { display: flex; gap: .75rem; flex-wrap: wrap; }
+    .btn-principal { padding: .65rem 1.2rem; border: none; border-radius: 8px; background: #1a73e8; color: #fff; cursor: pointer; }
+    .btn-sec { padding: .65rem 1.2rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .btn-principal:disabled, .btn-sec:disabled { opacity: .6; }
+</style>
+
+@code {
+    private string _tipo = "stock";
+    private DateTime _desde = DateTime.Today.AddDays(-30);
+    private DateTime _hasta = DateTime.Today;
+    private string _destinatario = "";
+    private string? _error;
+    private string? _aviso;
+    private bool _ocupado;
+
+    private async Task DescargarAsync()
+    {
+        if (_ocupado) return;
+        _error = null;
+        _aviso = null;
+        _ocupado = true;
+
+        var (ok, ruta, error) = await Reportes.DescargarAsync(_tipo, _desde, _hasta);
+
+        _ocupado = false;
+
+        if (!ok || ruta is null)
+        {
+            _error = error;
+            return;
+        }
+
+        _aviso = "Reporte descargado.";
+        await Reportes.AbrirAsync(ruta);
+    }
+
+    private async Task EnviarAsync()
+    {
+        if (_ocupado) return;
+        _error = null;
+        _aviso = null;
+        _ocupado = true;
+
+        var (ok, mensaje) = await Reportes.EnviarPorCorreoAsync(_tipo, _desde, _hasta, _destinatario);
+
+        _ocupado = false;
+
+        if (ok) _aviso = mensaje;
+        else _error = mensaje;
+    }
+}

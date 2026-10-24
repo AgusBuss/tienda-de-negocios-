@@ -104,7 +104,8 @@ namespace InventarioAPI.Controllers
                     CategoriaId = p.CategoriaId,
                     CategoriaNombre = p.Categoria != null ? p.Categoria.Nombre : null,
                     ProveedorId = p.ProveedorId,
-                    ProveedorNombre = p.Proveedor != null ? p.Proveedor.Nombre : null
+                    ProveedorNombre = p.Proveedor != null ? p.Proveedor.Nombre : null,
+                    Activo = p.Activo
                 })
                 .ToListAsync();
 
@@ -141,7 +142,8 @@ namespace InventarioAPI.Controllers
                 CategoriaId = p.CategoriaId,
                 CategoriaNombre = p.Categoria?.Nombre,
                 ProveedorId = p.ProveedorId,
-                ProveedorNombre = p.Proveedor?.Nombre
+                ProveedorNombre = p.Proveedor?.Nombre,
+                Activo = p.Activo
             });
         }
 
@@ -202,8 +204,10 @@ namespace InventarioAPI.Controllers
                 Descripcion = producto.Descripcion,
                 Precio = producto.Precio,
                 Stock = producto.Stock,
+                ImagenUrl = producto.ImagenUrl,
                 CategoriaId = producto.CategoriaId,
-                ProveedorId = producto.ProveedorId
+                ProveedorId = producto.ProveedorId,
+                Activo = producto.Activo
             });
         }
 
@@ -230,6 +234,8 @@ namespace InventarioAPI.Controllers
             }
 
             var detalle = $"'{producto.Nombre}': precio {producto.Precio} -> {dto.Precio}, stock {producto.Stock} -> {dto.Stock}";
+            if (producto.Activo != dto.Activo)
+                detalle += $", activo {producto.Activo} -> {dto.Activo}";
 
             // Si cambia el stock a mano, queda registrado como ajuste
             var diferencia = dto.Stock - producto.Stock;
@@ -251,6 +257,7 @@ namespace InventarioAPI.Controllers
             producto.Stock = dto.Stock;
             producto.CategoriaId = dto.CategoriaId;
             producto.ProveedorId = proveedorId;
+            producto.Activo = dto.Activo; // permite reactivar un producto dado de baja
 
             await _context.SaveChangesAsync();
 

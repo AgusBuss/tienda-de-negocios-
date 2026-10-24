@@ -1,0 +1,135 @@
+﻿@implements IDisposable
+@inject SessionService Sesion
+@inject CarritoService Carrito
+@inject NavigationManager Nav
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">InventarioApp</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+
+        @if (Sesion.EstaLogueado)
+        {
+            <div class="nav-item px-3" style="color:#fff;padding:.75rem 0;">
+                Hola, <strong>@Sesion.Usuario</strong><br />
+                <small>Rol: @Sesion.Rol</small>
+            </div>
+        }
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Catálogo
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="carrito">
+                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Carrito
+                @if (Carrito.CantidadTotal > 0)
+                {
+                    <span style="background:#e53935;color:#fff;border-radius:10px;padding:0 .5rem;margin-left:.4rem;font-size:.8rem;">@Carrito.CantidadTotal</span>
+                }
+            </NavLink>
+        </div>
+
+        @if (Sesion.EstaLogueado)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="mis-compras">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Mis compras
+                </NavLink>
+            </div>
+        }
+
+        @if (Sesion.EsPersonal)
+        {
+            <div class="nav-item px-3" style="color:#aab;font-size:.8rem;padding-top:.75rem;">ADMINISTRACIÓN</div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="admin/productos">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Productos
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="admin/ingresos">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Ingresos
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="admin/ventas">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Ventas de mostrador
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="admin/reportes">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Reportes
+                </NavLink>
+            </div>
+        }
+
+        @if (Sesion.EsAdmin)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="admin/usuarios">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Usuarios y roles
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="admin/logs">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Logs y auditoría
+                </NavLink>
+            </div>
+        }
+
+        @if (!Sesion.EstaLogueado)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="login">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Ingresar
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="registro">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Crear cuenta
+                </NavLink>
+            </div>
+        }
+        else
+        {
+            <div class="nav-item px-3">
+                <a class="nav-link" href="#" @onclick="CerrarSesion" @onclick:preventDefault>
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Cerrar sesión
+                </a>
+            </div>
+        }
+    </nav>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Sesion.SesionCambiada += Refrescar;
+        Carrito.Cambio += Refrescar;
+    }
+
+    private void Refrescar() => InvokeAsync(StateHasChanged);
+
+    private void CerrarSesion()
+    {
+        Sesion.CerrarSesion();
+        Carrito.Vaciar();
+        Nav.NavigateTo("/");
+    }
+
+    public void Dispose()
+    {
+        Sesion.SesionCambiada -= Refrescar;
+        Carrito.Cambio -= Refrescar;
+    }
+}
