@@ -25,6 +25,7 @@ namespace InventarioApp
             builder.Services.AddSingleton<ReportesClient>();
             builder.Services.AddSingleton<UsuariosClient>();
             builder.Services.AddSingleton<LogsClient>();
+            builder.Services.AddSingleton<MaestrosClient>();
 
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();

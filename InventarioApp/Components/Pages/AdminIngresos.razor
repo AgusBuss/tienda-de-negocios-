@@ -1,6 +1,7 @@
 @page "/admin/ingresos"
 @inject ApiClient Api
 @inject SessionService Sesion
+@inject MaestrosClient Maestros
 
 <PageTitle>Ingresos de mercadería</PageTitle>
 
@@ -161,7 +162,7 @@ else
     {
         if (!Sesion.EsPersonal) return;
 
-        var pr = await Api.GetProveedoresAsync();
+        var pr = await Maestros.GetProveedoresAsync();
         if (pr.Ok && pr.Data is not null) _proveedores = pr.Data;
         else _error = pr.Error;
 

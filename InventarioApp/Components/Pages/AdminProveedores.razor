@@ -1,0 +1,205 @@
+@page "/admin/proveedores"
+@inject MaestrosClient Maestros
+@inject SessionService Sesion
+
+<PageTitle>Proveedores</PageTitle>
+
+<h1>Proveedores</h1>
+
+@if (!Sesion.EsPersonal)
+{
+    <div class="error">Esta sección es solo para Admin y Vendedor.</div>
+}
+else
+{
+    @if (_aviso is not null) { <div class="aviso">@_aviso</div> }
+    @if (_error is not null) { <div class="error">@_error</div> }
+
+    @if (_form is not null)
+    {
+        <div class="form">
+            <h2>@(_editandoId == 0 ? "Nuevo proveedor" : $"Editar proveedor #{_editandoId}")</h2>
+            <div class="campo"><label>Nombre *</label><input @bind="_form.Nombre" /></div>
+            <div class="campo"><label>CUIT</label><input @bind="_form.CUIT" placeholder="20-12345678-9" /></div>
+            <div class="campo"><label>Teléfono</label><input @bind="_form.Telefono" /></div>
+            <div class="campo"><label>Email</label><input type="email" @bind="_form.Email" /></div>
+            <div class="campo"><label>Dirección</label><input @bind="_form.Direccion" /></div>
+            <div class="fila">
+                <button class="btn-principal" @onclick="GuardarAsync" disabled="@_guardando">
+                    @(_guardando ? "Guardando..." : "Guardar")
+                </button>
+                <button class="btn-sec" @onclick="Cancelar" disabled="@_guardando">Cancelar</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <button class="btn-principal" @onclick="Nuevo">+ Nuevo proveedor</button>
+    }
+
+    @if (_cargando)
+    {
+        <p class="nota">Cargando...</p>
+    }
+    else if (_proveedores.Count == 0)
+    {
+        <p class="nota">Todavía no hay proveedores. Creá el primero con el botón de arriba.</p>
+    }
+    else
+    {
+        <p class="nota">@_proveedores.Count proveedor(es)</p>
+
+        @foreach (var p in _proveedores)
+        {
+            <div class="fila-item">
+                <div class="info">
+                    <strong>@(string.IsNullOrWhiteSpace(p.Nombre) ? $"Proveedor #{p.Id}" : p.Nombre)</strong>
+                    <div class="nota">
+                        @(string.IsNullOrWhiteSpace(p.CUIT) ? "Sin CUIT" : "CUIT " + p.CUIT)
+                        · @(string.IsNullOrWhiteSpace(p.Telefono) ? "sin teléfono" : p.Telefono)
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(p.Email) || !string.IsNullOrWhiteSpace(p.Direccion))
+                    {
+                        <div class="nota">@p.Email @(string.IsNullOrWhiteSpace(p.Direccion) ? "" : "· " + p.Direccion)</div>
+                    }
+                </div>
+                <div class="acc">
+                    <button class="btn-sec" @onclick="() => Editar(p)">Editar</button>
+                    @if (_confirmarId == p.Id)
+                    {
+                        <button class="btn-peligro" @onclick="() => EliminarAsync(p)">¿Seguro?</button>
+                    }
+                    else
+                    {
+                        <button class="btn-peligro-sec" @onclick="() => _confirmarId = p.Id">Borrar</button>
+                    }
+                </div>
+            </div>
+        }
+    }
+}
+
+<style>
+    .error { background: #fde8e8; color: #b00020; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .aviso { background: #e6f4ea; color: #137333; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .nota { color: #777; font-size: .85rem; }
+    .form { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; background: #fafafa; max-width: 480px; }
+    .campo { display: flex; flex-direction: column; margin-bottom: .75rem; }
+    .campo label { font-weight: 600; margin-bottom: .25rem; font-size: .85rem; }
+    .campo input { padding: .6rem; border: 1px solid #bbb; border-radius: 8px; font-size: 1rem; }
+    .fila { display: flex; gap: .5rem; }
+    .btn-principal { padding: .6rem 1.1rem; border: none; border-radius: 8px; background: #1a73e8; color: #fff; cursor: pointer; margin-bottom: 1rem; }
+    .form .btn-principal { margin-bottom: 0; }
+    .btn-principal:disabled { opacity: .6; }
+    .btn-sec { padding: .6rem 1.1rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .btn-peligro { padding: .6rem 1.1rem; border: none; border-radius: 8px; background: #b00020; color: #fff; cursor: pointer; }
+    .btn-peligro-sec { padding: .6rem 1.1rem; border: 1px solid #b00020; border-radius: 8px; background: #fff; color: #b00020; cursor: pointer; }
+    .fila-item { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .7rem 0; border-bottom: 1px solid #eee; flex-wrap: wrap; }
+    .fila-item .info { flex: 1; min-width: 150px; }
+    .acc { display: flex; gap: .4rem; }
+</style>
+
+@code {
+    private List<ProveedorDto> _proveedores = new();
+    private ProveedorCreateDto? _form;
+    private int _editandoId;
+    private int _confirmarId;
+    private string? _error;
+    private string? _aviso;
+    private bool _cargando;
+    private bool _guardando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sesion.EsPersonal) await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        StateHasChanged();
+
+        var r = await Maestros.GetProveedoresAsync();
+        _cargando = false;
+
+        if (r.Ok && r.Data is not null) _proveedores = r.Data;
+        else _error = r.Error;
+    }
+
+    private void LimpiarMensajes()
+    {
+        _error = null;
+        _aviso = null;
+        _confirmarId = 0;
+    }
+
+    private void Nuevo()
+    {
+        LimpiarMensajes();
+        _editandoId = 0;
+        _form = new ProveedorCreateDto();
+    }
+
+    private void Editar(ProveedorDto p)
+    {
+        LimpiarMensajes();
+        _editandoId = p.Id;
+        _form = new ProveedorCreateDto
+        {
+            Nombre = p.Nombre,
+            CUIT = p.CUIT,
+            Telefono = p.Telefono,
+            Email = p.Email,
+            Direccion = p.Direccion
+        };
+    }
+
+    private void Cancelar() => _form = null;
+
+    private static string? VacioANulo(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    private async Task GuardarAsync()
+    {
+        if (_form is null || _guardando) return;
+        LimpiarMensajes();
+
+        if (string.IsNullOrWhiteSpace(_form.Nombre))
+        {
+            _error = "El nombre es obligatorio.";
+            return;
+        }
+
+        _form.Nombre = _form.Nombre.Trim();
+        _form.CUIT = VacioANulo(_form.CUIT);
+        _form.Telefono = VacioANulo(_form.Telefono);
+        _form.Email = VacioANulo(_form.Email);
+        _form.Direccion = VacioANulo(_form.Direccion);
+
+        _guardando = true;
+        var r = _editandoId == 0
+            ? await Maestros.CrearProveedorAsync(_form)
+            : await Maestros.ActualizarProveedorAsync(_editandoId, _form);
+        _guardando = false;
+
+        if (!r.Ok)
+        {
+            _error = r.Error;
+            return;
+        }
+
+        _aviso = _editandoId == 0 ? "Proveedor creado." : "Proveedor actualizado.";
+        _form = null;
+        await CargarAsync();
+    }
+
+    private async Task EliminarAsync(ProveedorDto p)
+    {
+        LimpiarMensajes();
+
+        var r = await Maestros.EliminarProveedorAsync(p.Id);
+        if (r.Ok) _aviso = $"Se borró '{p.Nombre}'.";
+        else _error = r.Error; // por ejemplo, si tiene productos o ingresos asociados
+
+        await CargarAsync();
+    }
+}

@@ -1,6 +1,7 @@
 @page "/admin/ventas"
 @inject ApiClient Api
 @inject SessionService Sesion
+@inject MaestrosClient Maestros
 
 <PageTitle>Ventas de mostrador</PageTitle>
 
@@ -164,7 +165,7 @@ else
     {
         if (!Sesion.EsPersonal) return;
 
-        var cl = await Api.GetClientesAsync();
+        var cl = await Maestros.GetClientesAsync();
         if (cl.Ok && cl.Data is not null) _clientes = cl.Data;
         else _error = cl.Error;
 

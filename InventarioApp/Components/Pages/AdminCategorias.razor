@@ -1,0 +1,189 @@
+@page "/admin/categorias"
+@inject MaestrosClient Maestros
+@inject SessionService Sesion
+
+<PageTitle>Categorías</PageTitle>
+
+<h1>Categorías</h1>
+
+@if (!Sesion.EsPersonal)
+{
+    <div class="error">Esta sección es solo para Admin y Vendedor.</div>
+}
+else
+{
+    @if (_aviso is not null)
+    {
+        <div class="aviso">@_aviso</div>
+    }
+    @if (_error is not null)
+    {
+        <div class="error">@_error</div>
+    }
+
+    @if (_form is not null)
+    {
+        <div class="form">
+            <h2>@(_editandoId == 0 ? "Nueva categoría" : $"Editar categoría #{_editandoId}")</h2>
+            <div class="campo"><label>Nombre *</label><input @bind="_form.Nombre" /></div>
+            <div class="campo"><label>Descripción</label><input @bind="_form.Descripcion" /></div>
+            <div class="fila">
+                <button class="btn-principal" @onclick="GuardarAsync" disabled="@_guardando">
+                    @(_guardando ? "Guardando..." : "Guardar")
+                </button>
+                <button class="btn-sec" @onclick="Cancelar" disabled="@_guardando">Cancelar</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <button class="btn-principal" @onclick="Nueva">+ Nueva categoría</button>
+    }
+
+    @if (_cargando)
+    {
+        <p class="nota">Cargando...</p>
+    }
+    else if (_categorias.Count == 0)
+    {
+        <p class="nota">Todavía no hay categorías. Creá la primera con el botón de arriba.</p>
+    }
+    else
+    {
+        <p class="nota">@_categorias.Count categoría(s)</p>
+
+        @foreach (var c in _categorias)
+        {
+            <div class="fila-item">
+                <div class="info">
+                    <strong>@c.Nombre</strong>
+                    <div class="nota">@(string.IsNullOrWhiteSpace(c.Descripcion) ? "Sin descripción" : c.Descripcion)</div>
+                </div>
+                <div class="acc">
+                    <button class="btn-sec" @onclick="() => Editar(c)">Editar</button>
+                    @if (_confirmarId == c.Id)
+                    {
+                        <button class="btn-peligro" @onclick="() => EliminarAsync(c)">¿Seguro?</button>
+                    }
+                    else
+                    {
+                        <button class="btn-peligro-sec" @onclick="() => _confirmarId = c.Id">Borrar</button>
+                    }
+                </div>
+            </div>
+        }
+    }
+}
+
+<style>
+    .error { background: #fde8e8; color: #b00020; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .aviso { background: #e6f4ea; color: #137333; padding: .6rem; border-radius: 8px; margin-bottom: 1rem; }
+    .nota { color: #777; font-size: .85rem; }
+    .form { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; margin-bottom: 1rem; background: #fafafa; max-width: 480px; }
+    .campo { display: flex; flex-direction: column; margin-bottom: .75rem; }
+    .campo label { font-weight: 600; margin-bottom: .25rem; font-size: .85rem; }
+    .campo input { padding: .6rem; border: 1px solid #bbb; border-radius: 8px; font-size: 1rem; }
+    .fila { display: flex; gap: .5rem; }
+    .btn-principal { padding: .6rem 1.1rem; border: none; border-radius: 8px; background: #1a73e8; color: #fff; cursor: pointer; margin-bottom: 1rem; }
+    .form .btn-principal { margin-bottom: 0; }
+    .btn-principal:disabled { opacity: .6; }
+    .btn-sec { padding: .6rem 1.1rem; border: 1px solid #bbb; border-radius: 8px; background: #fff; cursor: pointer; }
+    .btn-peligro { padding: .6rem 1.1rem; border: none; border-radius: 8px; background: #b00020; color: #fff; cursor: pointer; }
+    .btn-peligro-sec { padding: .6rem 1.1rem; border: 1px solid #b00020; border-radius: 8px; background: #fff; color: #b00020; cursor: pointer; }
+    .fila-item { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .7rem 0; border-bottom: 1px solid #eee; flex-wrap: wrap; }
+    .fila-item .info { flex: 1; min-width: 150px; }
+    .acc { display: flex; gap: .4rem; }
+</style>
+
+@code {
+    private List<CategoriaDto> _categorias = new();
+    private CategoriaCreateDto? _form;
+    private int _editandoId;
+    private int _confirmarId;
+    private string? _error;
+    private string? _aviso;
+    private bool _cargando;
+    private bool _guardando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sesion.EsPersonal) await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        StateHasChanged();
+
+        var r = await Maestros.GetCategoriasAsync();
+        _cargando = false;
+
+        if (r.Ok && r.Data is not null) _categorias = r.Data;
+        else _error = r.Error;
+    }
+
+    private void LimpiarMensajes()
+    {
+        _error = null;
+        _aviso = null;
+        _confirmarId = 0;
+    }
+
+    private void Nueva()
+    {
+        LimpiarMensajes();
+        _editandoId = 0;
+        _form = new CategoriaCreateDto();
+    }
+
+    private void Editar(CategoriaDto c)
+    {
+        LimpiarMensajes();
+        _editandoId = c.Id;
+        _form = new CategoriaCreateDto { Nombre = c.Nombre, Descripcion = c.Descripcion };
+    }
+
+    private void Cancelar() => _form = null;
+
+    private async Task GuardarAsync()
+    {
+        if (_form is null || _guardando) return;
+        LimpiarMensajes();
+
+        if (string.IsNullOrWhiteSpace(_form.Nombre))
+        {
+            _error = "El nombre es obligatorio.";
+            return;
+        }
+
+        _form.Nombre = _form.Nombre.Trim();
+        if (string.IsNullOrWhiteSpace(_form.Descripcion)) _form.Descripcion = null;
+
+        _guardando = true;
+        var r = _editandoId == 0
+            ? await Maestros.CrearCategoriaAsync(_form)
+            : await Maestros.ActualizarCategoriaAsync(_editandoId, _form);
+        _guardando = false;
+
+        if (!r.Ok)
+        {
+            _error = r.Error;
+            return;
+        }
+
+        _aviso = _editandoId == 0 ? "Categoría creada." : "Categoría actualizada.";
+        _form = null;
+        await CargarAsync();
+    }
+
+    private async Task EliminarAsync(CategoriaDto c)
+    {
+        LimpiarMensajes();
+
+        var r = await Maestros.EliminarCategoriaAsync(c.Id);
+        if (r.Ok) _aviso = $"Se borró '{c.Nombre}'.";
+        else _error = r.Error; // por ejemplo, si tiene productos asociados
+
+        await CargarAsync();
+    }
+}

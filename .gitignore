@@ -480,3 +480,11 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Configuración con claves reales (solo servidor)
+appsettings.Production.json
+**/appsettings.Production.json
+
+# Configuración con claves reales (solo servidor)
+appsettings.Production.json
+**/appsettings.Production.json

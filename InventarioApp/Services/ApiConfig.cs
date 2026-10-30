@@ -3,7 +3,7 @@
 public static class ApiConfig
 {
     // true = usa la API publicada en MonsterASP, false = usa la API local
-    public const bool UsarProduccion = false;
+    public const bool UsarProduccion = true;
 
     private const string UrlProduccion = "https://inventarioapitrani.tryasp.net";
     private const string UrlLocalWindows = "https://localhost:7295";
